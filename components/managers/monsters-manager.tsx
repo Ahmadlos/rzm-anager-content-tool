@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Search, MoreHorizontal, Edit, Trash2 } from "lucide-react"
+import { Plus, Search, MoreHorizontal, Edit, Trash2, GitBranch } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -62,7 +62,11 @@ const initialMonsters: Monster[] = [
   { id: 7, name: "Holy Phoenix", type: "Mythical", level: 50, hp: 8000, attack: 300, defense: 200, element: "light", dropRate: 5, description: "Legendary bird of rebirth." },
 ]
 
-export function MonstersManager() {
+interface MonstersManagerProps {
+  onOpenCanvas?: () => void
+}
+
+export function MonstersManager({ onOpenCanvas }: MonstersManagerProps = {}) {
   const [monsters, setMonsters] = useState<Monster[]>(initialMonsters)
   const [search, setSearch] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -125,84 +129,91 @@ export function MonstersManager() {
           <h1 className="text-2xl font-bold text-foreground">Monster Manager</h1>
           <p className="text-sm text-muted-foreground">Define creatures and enemies for encounters</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={handleAdd} className="bg-primary text-primary-foreground hover:bg-primary/90">
-              <Plus className="mr-2 h-4 w-4" />
-              Create Monster
+        <div className="flex items-center gap-2">
+          {onOpenCanvas && (
+            <Button onClick={onOpenCanvas} variant="outline" className="gap-1.5 bg-transparent text-xs">
+              <GitBranch className="h-3.5 w-3.5" />
+              Open Node Editor
             </Button>
-          </DialogTrigger>
-          <DialogContent className="bg-card border-border max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="text-foreground">{editingMonster ? "Edit Monster" : "Create New Monster"}</DialogTitle>
-            </DialogHeader>
-            <div className="flex flex-col gap-4 py-4">
-              <div className="flex gap-4">
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>Name</Label>
-                  <Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Monster name" />
+          )}
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={handleAdd} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                <Plus className="mr-2 h-4 w-4" />
+                Create Monster
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="bg-card border-border max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="text-foreground">{editingMonster ? "Edit Monster" : "Create New Monster"}</DialogTitle>
+              </DialogHeader>
+              <div className="flex flex-col gap-4 py-4">
+                <div className="flex gap-4">
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Label>Name</Label>
+                    <Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Monster name" />
+                  </div>
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Label>Type</Label>
+                    <Input value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })} placeholder="Beast, Dragon..." />
+                  </div>
                 </div>
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>Type</Label>
-                  <Input value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })} placeholder="Beast, Dragon..." />
+                <div className="flex gap-4">
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Label>Level</Label>
+                    <Input type="number" value={formData.level} onChange={(e) => setFormData({ ...formData, level: Number(e.target.value) })} />
+                  </div>
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Label>HP</Label>
+                    <Input type="number" value={formData.hp} onChange={(e) => setFormData({ ...formData, hp: Number(e.target.value) })} />
+                  </div>
+                </div>
+                <div className="flex gap-4">
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Label>Attack</Label>
+                    <Input type="number" value={formData.attack} onChange={(e) => setFormData({ ...formData, attack: Number(e.target.value) })} />
+                  </div>
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Label>Defense</Label>
+                    <Input type="number" value={formData.defense} onChange={(e) => setFormData({ ...formData, defense: Number(e.target.value) })} />
+                  </div>
+                </div>
+                <div className="flex gap-4">
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Label>Element</Label>
+                    <Select value={formData.element} onValueChange={(v) => setFormData({ ...formData, element: v as Monster["element"] })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        <SelectItem value="fire">Fire</SelectItem>
+                        <SelectItem value="water">Water</SelectItem>
+                        <SelectItem value="earth">Earth</SelectItem>
+                        <SelectItem value="wind">Wind</SelectItem>
+                        <SelectItem value="dark">Dark</SelectItem>
+                        <SelectItem value="light">Light</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Label>Drop Rate (%)</Label>
+                    <Input type="number" value={formData.dropRate} onChange={(e) => setFormData({ ...formData, dropRate: Number(e.target.value) })} />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Description</Label>
+                  <Textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Monster description..." rows={2} />
                 </div>
               </div>
-              <div className="flex gap-4">
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>Level</Label>
-                  <Input type="number" value={formData.level} onChange={(e) => setFormData({ ...formData, level: Number(e.target.value) })} />
-                </div>
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>HP</Label>
-                  <Input type="number" value={formData.hp} onChange={(e) => setFormData({ ...formData, hp: Number(e.target.value) })} />
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>Attack</Label>
-                  <Input type="number" value={formData.attack} onChange={(e) => setFormData({ ...formData, attack: Number(e.target.value) })} />
-                </div>
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>Defense</Label>
-                  <Input type="number" value={formData.defense} onChange={(e) => setFormData({ ...formData, defense: Number(e.target.value) })} />
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>Element</Label>
-                  <Select value={formData.element} onValueChange={(v) => setFormData({ ...formData, element: v as Monster["element"] })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">None</SelectItem>
-                      <SelectItem value="fire">Fire</SelectItem>
-                      <SelectItem value="water">Water</SelectItem>
-                      <SelectItem value="earth">Earth</SelectItem>
-                      <SelectItem value="wind">Wind</SelectItem>
-                      <SelectItem value="dark">Dark</SelectItem>
-                      <SelectItem value="light">Light</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>Drop Rate (%)</Label>
-                  <Input type="number" value={formData.dropRate} onChange={(e) => setFormData({ ...formData, dropRate: Number(e.target.value) })} />
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>Description</Label>
-                <Textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Monster description..." rows={2} />
-              </div>
-            </div>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button variant="outline">Cancel</Button>
-              </DialogClose>
-              <Button onClick={handleSave} className="bg-primary text-primary-foreground">Save</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button variant="outline">Cancel</Button>
+                </DialogClose>
+                <Button onClick={handleSave} className="bg-primary text-primary-foreground">Save</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
-
       <div className="flex items-center gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -210,7 +221,6 @@ export function MonstersManager() {
         </div>
         <Badge variant="outline" className="border-border text-muted-foreground">{filtered.length} Monsters</Badge>
       </div>
-
       <div className="rounded-lg border border-border bg-card">
         <Table>
           <TableHeader>

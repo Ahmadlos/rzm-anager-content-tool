@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Search, MoreHorizontal, Edit, Trash2 } from "lucide-react"
+import { Plus, Search, MoreHorizontal, Edit, Trash2, GitBranch } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -61,7 +61,11 @@ const initialSkills: Skill[] = [
   { id: 8, name: "Earth Shatter", type: "attack", element: "Earth", manaCost: 60, cooldown: 6, damage: 350, requiredLevel: 25, description: "Shakes the ground dealing AoE damage." },
 ]
 
-export function SkillsManager() {
+interface SkillsManagerProps {
+  onOpenCanvas?: () => void
+}
+
+export function SkillsManager({ onOpenCanvas }: SkillsManagerProps = {}) {
   const [skills, setSkills] = useState<Skill[]>(initialSkills)
   const [search, setSearch] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -123,74 +127,82 @@ export function SkillsManager() {
           <h1 className="text-2xl font-bold text-foreground">Skills Manager</h1>
           <p className="text-sm text-muted-foreground">Create and manage character abilities and skills</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={handleAdd} className="bg-primary text-primary-foreground hover:bg-primary/90">
-              <Plus className="mr-2 h-4 w-4" />
-              Create Skill
+        <div className="flex items-center gap-2">
+          {onOpenCanvas && (
+            <Button onClick={onOpenCanvas} variant="outline" className="gap-1.5 bg-transparent text-xs">
+              <GitBranch className="h-3.5 w-3.5" />
+              Open Node Editor
             </Button>
-          </DialogTrigger>
-          <DialogContent className="bg-card border-border max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="text-foreground">{editingSkill ? "Edit Skill" : "Create New Skill"}</DialogTitle>
-            </DialogHeader>
-            <div className="flex flex-col gap-4 py-4">
-              <div className="flex gap-4">
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>Name</Label>
-                  <Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Skill name" />
+          )}
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={handleAdd} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                <Plus className="mr-2 h-4 w-4" />
+                Create Skill
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="bg-card border-border max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="text-foreground">{editingSkill ? "Edit Skill" : "Create New Skill"}</DialogTitle>
+              </DialogHeader>
+              <div className="flex flex-col gap-4 py-4">
+                <div className="flex gap-4">
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Label>Name</Label>
+                    <Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Skill name" />
+                  </div>
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Label>Element</Label>
+                    <Input value={formData.element} onChange={(e) => setFormData({ ...formData, element: e.target.value })} placeholder="Fire, Water..." />
+                  </div>
                 </div>
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>Element</Label>
-                  <Input value={formData.element} onChange={(e) => setFormData({ ...formData, element: e.target.value })} placeholder="Fire, Water..." />
+                <div className="flex gap-4">
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Label>Type</Label>
+                    <Select value={formData.type} onValueChange={(v) => setFormData({ ...formData, type: v as Skill["type"] })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="attack">Attack</SelectItem>
+                        <SelectItem value="defense">Defense</SelectItem>
+                        <SelectItem value="support">Support</SelectItem>
+                        <SelectItem value="passive">Passive</SelectItem>
+                        <SelectItem value="ultimate">Ultimate</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Label>Damage</Label>
+                    <Input type="number" value={formData.damage} onChange={(e) => setFormData({ ...formData, damage: Number(e.target.value) })} />
+                  </div>
+                </div>
+                <div className="flex gap-4">
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Label>Mana Cost</Label>
+                    <Input type="number" value={formData.manaCost} onChange={(e) => setFormData({ ...formData, manaCost: Number(e.target.value) })} />
+                  </div>
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Label>Cooldown (s)</Label>
+                    <Input type="number" value={formData.cooldown} onChange={(e) => setFormData({ ...formData, cooldown: Number(e.target.value) })} />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Required Level</Label>
+                  <Input type="number" value={formData.requiredLevel} onChange={(e) => setFormData({ ...formData, requiredLevel: Number(e.target.value) })} />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Description</Label>
+                  <Textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Skill description..." rows={2} />
                 </div>
               </div>
-              <div className="flex gap-4">
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>Type</Label>
-                  <Select value={formData.type} onValueChange={(v) => setFormData({ ...formData, type: v as Skill["type"] })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="attack">Attack</SelectItem>
-                      <SelectItem value="defense">Defense</SelectItem>
-                      <SelectItem value="support">Support</SelectItem>
-                      <SelectItem value="passive">Passive</SelectItem>
-                      <SelectItem value="ultimate">Ultimate</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>Damage</Label>
-                  <Input type="number" value={formData.damage} onChange={(e) => setFormData({ ...formData, damage: Number(e.target.value) })} />
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>Mana Cost</Label>
-                  <Input type="number" value={formData.manaCost} onChange={(e) => setFormData({ ...formData, manaCost: Number(e.target.value) })} />
-                </div>
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>Cooldown (s)</Label>
-                  <Input type="number" value={formData.cooldown} onChange={(e) => setFormData({ ...formData, cooldown: Number(e.target.value) })} />
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>Required Level</Label>
-                <Input type="number" value={formData.requiredLevel} onChange={(e) => setFormData({ ...formData, requiredLevel: Number(e.target.value) })} />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>Description</Label>
-                <Textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Skill description..." rows={2} />
-              </div>
-            </div>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button variant="outline">Cancel</Button>
-              </DialogClose>
-              <Button onClick={handleSave} className="bg-primary text-primary-foreground">Save</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button variant="outline">Cancel</Button>
+                </DialogClose>
+                <Button onClick={handleSave} className="bg-primary text-primary-foreground">Save</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="flex items-center gap-3">

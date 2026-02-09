@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Search, MoreHorizontal, Edit, Trash2, LayoutGrid, List, MapPin, Shield, MessageCircle } from "lucide-react"
+import { Plus, Search, MoreHorizontal, Edit, Trash2, LayoutGrid, List, MapPin, Shield, MessageCircle, GitBranch } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -124,10 +124,16 @@ export function NPCsManager({ onOpenCanvas }: NPCsManagerProps) {
             <h1 className="text-2xl font-bold text-foreground">NPCs Manager</h1>
             <p className="text-sm text-muted-foreground">Manage non-player characters in your game world</p>
           </div>
-          <Button onClick={onOpenCanvas} className="bg-primary text-primary-foreground hover:bg-primary/90">
-            <Plus className="mr-2 h-4 w-4" />
-            Create NPC
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button onClick={onOpenCanvas} variant="outline" className="gap-1.5 bg-transparent text-xs">
+              <GitBranch className="h-3.5 w-3.5" />
+              Open Node Editor
+            </Button>
+            <Button onClick={onOpenCanvas} className="bg-primary text-primary-foreground hover:bg-primary/90">
+              <Plus className="mr-2 h-4 w-4" />
+              Create NPC
+            </Button>
+          </div>
         </div>
 
         <div className="flex items-center gap-3">

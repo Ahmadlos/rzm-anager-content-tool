@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Search, MoreHorizontal, Edit, Trash2 } from "lucide-react"
+import { Plus, Search, MoreHorizontal, Edit, Trash2, GitBranch } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -59,7 +59,11 @@ const initialItems: Item[] = [
   { id: 8, name: "Steel Gauntlets", type: "Armor", rarity: "uncommon", value: 350, weight: 4.0, description: "Heavy but protective." },
 ]
 
-export function ItemsManager() {
+interface ItemsManagerProps {
+  onOpenCanvas?: () => void
+}
+
+export function ItemsManager({ onOpenCanvas }: ItemsManagerProps = {}) {
   const [items, setItems] = useState<Item[]>(initialItems)
   const [search, setSearch] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -114,64 +118,72 @@ export function ItemsManager() {
           <h1 className="text-2xl font-bold text-foreground">Items Manager</h1>
           <p className="text-sm text-muted-foreground">Manage weapons, armor, consumables, and materials</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={handleAdd} className="bg-primary text-primary-foreground hover:bg-primary/90">
-              <Plus className="mr-2 h-4 w-4" />
-              Create Item
+        <div className="flex items-center gap-2">
+          {onOpenCanvas && (
+            <Button onClick={onOpenCanvas} variant="outline" className="gap-1.5 bg-transparent text-xs">
+              <GitBranch className="h-3.5 w-3.5" />
+              Open Node Editor
             </Button>
-          </DialogTrigger>
-          <DialogContent className="bg-card border-border">
-            <DialogHeader>
-              <DialogTitle className="text-foreground">{editingItem ? "Edit Item" : "Create New Item"}</DialogTitle>
-            </DialogHeader>
-            <div className="flex flex-col gap-4 py-4">
-              <div className="flex gap-4">
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>Name</Label>
-                  <Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Item name" />
+          )}
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={handleAdd} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                <Plus className="mr-2 h-4 w-4" />
+                Create Item
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="bg-card border-border">
+              <DialogHeader>
+                <DialogTitle className="text-foreground">{editingItem ? "Edit Item" : "Create New Item"}</DialogTitle>
+              </DialogHeader>
+              <div className="flex flex-col gap-4 py-4">
+                <div className="flex gap-4">
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Label>Name</Label>
+                    <Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Item name" />
+                  </div>
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Label>Type</Label>
+                    <Input value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })} placeholder="Weapon, Armor..." />
+                  </div>
                 </div>
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>Type</Label>
-                  <Input value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value })} placeholder="Weapon, Armor..." />
+                <div className="flex gap-4">
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Label>Rarity</Label>
+                    <Select value={formData.rarity} onValueChange={(v) => setFormData({ ...formData, rarity: v as Item["rarity"] })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="common">Common</SelectItem>
+                        <SelectItem value="uncommon">Uncommon</SelectItem>
+                        <SelectItem value="rare">Rare</SelectItem>
+                        <SelectItem value="epic">Epic</SelectItem>
+                        <SelectItem value="legendary">Legendary</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Label>Value (Gold)</Label>
+                    <Input type="number" value={formData.value} onChange={(e) => setFormData({ ...formData, value: Number(e.target.value) })} />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Weight (kg)</Label>
+                  <Input type="number" step="0.1" value={formData.weight} onChange={(e) => setFormData({ ...formData, weight: Number(e.target.value) })} />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Description</Label>
+                  <Textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Item description..." rows={3} />
                 </div>
               </div>
-              <div className="flex gap-4">
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>Rarity</Label>
-                  <Select value={formData.rarity} onValueChange={(v) => setFormData({ ...formData, rarity: v as Item["rarity"] })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="common">Common</SelectItem>
-                      <SelectItem value="uncommon">Uncommon</SelectItem>
-                      <SelectItem value="rare">Rare</SelectItem>
-                      <SelectItem value="epic">Epic</SelectItem>
-                      <SelectItem value="legendary">Legendary</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>Value (Gold)</Label>
-                  <Input type="number" value={formData.value} onChange={(e) => setFormData({ ...formData, value: Number(e.target.value) })} />
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>Weight (kg)</Label>
-                <Input type="number" step="0.1" value={formData.weight} onChange={(e) => setFormData({ ...formData, weight: Number(e.target.value) })} />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>Description</Label>
-                <Textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Item description..." rows={3} />
-              </div>
-            </div>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button variant="outline">Cancel</Button>
-              </DialogClose>
-              <Button onClick={handleSave} className="bg-primary text-primary-foreground">Save</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button variant="outline">Cancel</Button>
+                </DialogClose>
+                <Button onClick={handleSave} className="bg-primary text-primary-foreground">Save</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="flex items-center gap-3">

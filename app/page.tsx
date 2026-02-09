@@ -1,12 +1,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { DashboardHub, type EnvironmentId } from "@/components/dashboard/dashboard-hub"
+import { DashboardHub } from "@/components/dashboard/dashboard-hub"
 import { EnvironmentLoader } from "@/components/dashboard/environment-loader"
-import { NPCEnvironment } from "@/components/environments/npc-environment"
-import { ItemEnvironment } from "@/components/environments/item-environment"
-import { DatabaseEnvironment } from "@/components/environments/database-environment"
-import { NodeEditorEnvironment } from "@/components/environments/node-editor-environment"
+import { EnvironmentShell } from "@/components/environments/environment-shell"
+import type { EnvironmentId } from "@/lib/environment-schemas"
 
 type AppView = "dashboard" | "loading" | EnvironmentId
 
@@ -37,16 +35,10 @@ export default function App() {
     return <EnvironmentLoader envId={loadingTarget} />
   }
 
-  switch (view) {
-    case "npc":
-      return <NPCEnvironment onBack={handleBack} />
-    case "item":
-      return <ItemEnvironment onBack={handleBack} />
-    case "database":
-      return <DatabaseEnvironment onBack={handleBack} />
-    case "node-editor":
-      return <NodeEditorEnvironment onBack={handleBack} />
-    default:
-      return <DashboardHub onEnterEnvironment={handleEnterEnvironment} />
+  if (view === "dashboard") {
+    return <DashboardHub onEnterEnvironment={handleEnterEnvironment} />
   }
+
+  // All environment IDs use the unified EnvironmentShell
+  return <EnvironmentShell envId={view as EnvironmentId} onBack={handleBack} />
 }

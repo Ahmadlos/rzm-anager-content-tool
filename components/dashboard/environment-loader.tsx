@@ -2,13 +2,33 @@
 
 import { useState, useEffect } from "react"
 import { Spinner } from "@/components/ui/spinner"
-import type { EnvironmentId } from "./dashboard-hub"
+import type { EnvironmentId } from "@/lib/environment-schemas"
 
 const envLabels: Record<EnvironmentId, { title: string; subtitle: string }> = {
-  npc: { title: "NPC Editor", subtitle: "Loading character workspace..." },
-  item: { title: "Item Manager", subtitle: "Loading inventory tools..." },
-  database: { title: "Database Viewer", subtitle: "Connecting to data tables..." },
-  "node-editor": { title: "Node Editor", subtitle: "Loading visual scripting tools..." },
+  npc: {
+    title: "NPC Environment",
+    subtitle: "Loading NPCResource workspace...",
+  },
+  item: {
+    title: "Item Environment",
+    subtitle: "Loading ItemResource workspace...",
+  },
+  monster: {
+    title: "Monster Environment",
+    subtitle: "Loading MonsterResource workspace...",
+  },
+  quest: {
+    title: "Quest Environment",
+    subtitle: "Loading QuestResource workspace...",
+  },
+  skill: {
+    title: "Skill Environment",
+    subtitle: "Loading SkillResource workspace...",
+  },
+  state: {
+    title: "State Environment",
+    subtitle: "Loading StateResource workspace...",
+  },
 }
 
 interface EnvironmentLoaderProps {
@@ -39,7 +59,9 @@ export function EnvironmentLoader({ envId }: EnvironmentLoaderProps) {
           <Spinner className="size-6 text-foreground" />
         </div>
         <div className="flex flex-col items-center gap-1.5">
-          <h2 className="text-sm font-semibold text-foreground">{config.title}</h2>
+          <h2 className="text-sm font-semibold text-foreground">
+            {config.title}
+          </h2>
           <p className="text-xs text-muted-foreground">{config.subtitle}</p>
         </div>
       </div>

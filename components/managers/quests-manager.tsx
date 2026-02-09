@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Plus, Search, MoreHorizontal, Edit, Trash2 } from "lucide-react"
+import { Plus, Search, MoreHorizontal, Edit, Trash2, GitBranch } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
@@ -58,7 +58,11 @@ const initialQuests: Quest[] = [
   { id: 6, name: "Shadow Conspiracy", type: "main", difficulty: "hard", rewardXP: 8000, rewardGold: 3500, requiredLevel: 35, description: "Investigate the shadow cult's plans." },
 ]
 
-export function QuestsManager() {
+interface QuestsManagerProps {
+  onOpenCanvas?: () => void
+}
+
+export function QuestsManager({ onOpenCanvas }: QuestsManagerProps = {}) {
   const [quests, setQuests] = useState<Quest[]>(initialQuests)
   const [search, setSearch] = useState("")
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -126,75 +130,83 @@ export function QuestsManager() {
           <h1 className="text-2xl font-bold text-foreground">Quest Manager</h1>
           <p className="text-sm text-muted-foreground">Design quests and missions for players</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={handleAdd} className="bg-primary text-primary-foreground hover:bg-primary/90">
-              <Plus className="mr-2 h-4 w-4" />
-              Create Quest
+        <div className="flex items-center gap-2">
+          {onOpenCanvas && (
+            <Button onClick={onOpenCanvas} variant="outline" className="gap-1.5 bg-transparent text-xs">
+              <GitBranch className="h-3.5 w-3.5" />
+              Open Node Editor
             </Button>
-          </DialogTrigger>
-          <DialogContent className="bg-card border-border max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="text-foreground">{editingQuest ? "Edit Quest" : "Create New Quest"}</DialogTitle>
-            </DialogHeader>
-            <div className="flex flex-col gap-4 py-4">
-              <div className="flex flex-col gap-2">
-                <Label>Quest Name</Label>
-                <Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Quest name" />
-              </div>
-              <div className="flex gap-4">
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>Type</Label>
-                  <Select value={formData.type} onValueChange={(v) => setFormData({ ...formData, type: v as Quest["type"] })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="main">Main</SelectItem>
-                      <SelectItem value="side">Side</SelectItem>
-                      <SelectItem value="daily">Daily</SelectItem>
-                      <SelectItem value="event">Event</SelectItem>
-                    </SelectContent>
-                  </Select>
+          )}
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={handleAdd} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                <Plus className="mr-2 h-4 w-4" />
+                Create Quest
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="bg-card border-border max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="text-foreground">{editingQuest ? "Edit Quest" : "Create New Quest"}</DialogTitle>
+              </DialogHeader>
+              <div className="flex flex-col gap-4 py-4">
+                <div className="flex flex-col gap-2">
+                  <Label>Quest Name</Label>
+                  <Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Quest name" />
                 </div>
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>Difficulty</Label>
-                  <Select value={formData.difficulty} onValueChange={(v) => setFormData({ ...formData, difficulty: v as Quest["difficulty"] })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="easy">Easy</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="hard">Hard</SelectItem>
-                      <SelectItem value="extreme">Extreme</SelectItem>
-                    </SelectContent>
-                  </Select>
+                <div className="flex gap-4">
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Label>Type</Label>
+                    <Select value={formData.type} onValueChange={(v) => setFormData({ ...formData, type: v as Quest["type"] })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="main">Main</SelectItem>
+                        <SelectItem value="side">Side</SelectItem>
+                        <SelectItem value="daily">Daily</SelectItem>
+                        <SelectItem value="event">Event</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Label>Difficulty</Label>
+                    <Select value={formData.difficulty} onValueChange={(v) => setFormData({ ...formData, difficulty: v as Quest["difficulty"] })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="easy">Easy</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="hard">Hard</SelectItem>
+                        <SelectItem value="extreme">Extreme</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="flex gap-4">
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Label>Reward XP</Label>
+                    <Input type="number" value={formData.rewardXP} onChange={(e) => setFormData({ ...formData, rewardXP: Number(e.target.value) })} />
+                  </div>
+                  <div className="flex flex-1 flex-col gap-2">
+                    <Label>Reward Gold</Label>
+                    <Input type="number" value={formData.rewardGold} onChange={(e) => setFormData({ ...formData, rewardGold: Number(e.target.value) })} />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Required Level</Label>
+                  <Input type="number" value={formData.requiredLevel} onChange={(e) => setFormData({ ...formData, requiredLevel: Number(e.target.value) })} />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label>Description</Label>
+                  <Textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Quest description..." rows={3} />
                 </div>
               </div>
-              <div className="flex gap-4">
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>Reward XP</Label>
-                  <Input type="number" value={formData.rewardXP} onChange={(e) => setFormData({ ...formData, rewardXP: Number(e.target.value) })} />
-                </div>
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>Reward Gold</Label>
-                  <Input type="number" value={formData.rewardGold} onChange={(e) => setFormData({ ...formData, rewardGold: Number(e.target.value) })} />
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>Required Level</Label>
-                <Input type="number" value={formData.requiredLevel} onChange={(e) => setFormData({ ...formData, requiredLevel: Number(e.target.value) })} />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>Description</Label>
-                <Textarea value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} placeholder="Quest description..." rows={3} />
-              </div>
-            </div>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button variant="outline">Cancel</Button>
-              </DialogClose>
-              <Button onClick={handleSave} className="bg-primary text-primary-foreground">Save</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button variant="outline">Cancel</Button>
+                </DialogClose>
+                <Button onClick={handleSave} className="bg-primary text-primary-foreground">Save</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="flex items-center gap-3">
