@@ -1,5 +1,7 @@
 "use client"
 
+import { DialogTrigger } from "@/components/ui/dialog"
+
 import { useState } from "react"
 import { Plus, Search, MoreHorizontal, Edit, Trash2, LayoutGrid, List, MapPin, Shield, MessageCircle, GitBranch } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -129,10 +131,51 @@ export function NPCsManager({ onOpenCanvas }: NPCsManagerProps) {
               <GitBranch className="h-3.5 w-3.5" />
               Open Node Editor
             </Button>
-            <Button onClick={onOpenCanvas} className="bg-primary text-primary-foreground hover:bg-primary/90">
-              <Plus className="mr-2 h-4 w-4" />
-              Create NPC
-            </Button>
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create NPC
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="border-border bg-card max-w-lg">
+                <DialogHeader>
+                  <DialogTitle className="text-foreground">{editingNPC ? "Edit NPC" : "Create New NPC"}</DialogTitle>
+                </DialogHeader>
+                <div className="flex flex-col gap-4 py-4">
+                  <div className="flex gap-4">
+                    <div className="flex flex-1 flex-col gap-2">
+                      <Label>Name</Label>
+                      <Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="NPC name" />
+                    </div>
+                    <div className="flex flex-1 flex-col gap-2">
+                      <Label>Role</Label>
+                      <Input value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value })} placeholder="Merchant, Guard..." />
+                    </div>
+                  </div>
+                  <div className="flex gap-4">
+                    <div className="flex flex-1 flex-col gap-2">
+                      <Label>Location</Label>
+                      <Input value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} placeholder="Town Square..." />
+                    </div>
+                    <div className="flex flex-1 flex-col gap-2">
+                      <Label>Level</Label>
+                      <Input type="number" value={formData.level} onChange={(e) => setFormData({ ...formData, level: Number(e.target.value) })} />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Label>Dialogue</Label>
+                    <Textarea value={formData.dialogue} onChange={(e) => setFormData({ ...formData, dialogue: e.target.value })} placeholder="NPC dialogue..." rows={2} />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <DialogClose asChild>
+                    <Button variant="outline" className="bg-transparent">Cancel</Button>
+                  </DialogClose>
+                  <Button onClick={handleSave} className="bg-primary text-primary-foreground">Save</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
@@ -298,57 +341,6 @@ export function NPCsManager({ onOpenCanvas }: NPCsManagerProps) {
             ))}
           </div>
         )}
-
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent className="bg-card border-border">
-            <DialogHeader>
-              <DialogTitle className="text-foreground">Edit NPC</DialogTitle>
-            </DialogHeader>
-            <div className="flex flex-col gap-4 py-4">
-              <div className="flex flex-col gap-2">
-                <Label>Name</Label>
-                <Input value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="NPC name" />
-              </div>
-              <div className="flex gap-4">
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>Role</Label>
-                  <Input value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value })} placeholder="Role" />
-                </div>
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>Level</Label>
-                  <Input type="number" value={formData.level} onChange={(e) => setFormData({ ...formData, level: Number(e.target.value) })} />
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>Location</Label>
-                  <Input value={formData.location} onChange={(e) => setFormData({ ...formData, location: e.target.value })} placeholder="Location" />
-                </div>
-                <div className="flex flex-1 flex-col gap-2">
-                  <Label>Status</Label>
-                  <Select value={formData.status} onValueChange={(v) => setFormData({ ...formData, status: v as NPC["status"] })}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="inactive">Inactive</SelectItem>
-                      <SelectItem value="quest">Quest</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label>Dialogue</Label>
-                <Textarea value={formData.dialogue} onChange={(e) => setFormData({ ...formData, dialogue: e.target.value })} placeholder="NPC dialogue..." rows={3} />
-              </div>
-            </div>
-            <DialogFooter>
-              <DialogClose asChild>
-                <Button variant="outline" className="bg-transparent">Cancel</Button>
-              </DialogClose>
-              <Button onClick={handleSave} className="bg-primary text-primary-foreground">Save</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
     </TooltipProvider>
   )
