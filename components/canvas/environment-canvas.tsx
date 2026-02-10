@@ -120,6 +120,30 @@ const REFERENCE_DATA: Record<string, { id: number; name: string }[]> = {
     { id: 203, name: "Undead Remains" },
     { id: 204, name: "Elemental Cores" },
   ],
+  selected_effect_id: [
+    { id: 301, name: "Fire Burn" },
+    { id: 302, name: "Ice Slow" },
+    { id: 303, name: "Poison Tick" },
+    { id: 304, name: "Shield Buff" },
+  ],
+  selected_enhance_id: [
+    { id: 401, name: "Enhance +1" },
+    { id: 402, name: "Enhance +2" },
+    { id: 403, name: "Enhance +3" },
+    { id: 404, name: "Enhance +4" },
+  ],
+  required_state_id: [
+    { id: 1, name: "Burning" },
+    { id: 2, name: "Frozen" },
+    { id: 3, name: "Blessed" },
+    { id: 4, name: "Poisoned" },
+  ],
+  apply_state_id: [
+    { id: 1, name: "Burning" },
+    { id: 2, name: "Frozen" },
+    { id: 3, name: "Blessed" },
+    { id: 4, name: "Poisoned" },
+  ],
 }
 
 // ---- Default data generators ----

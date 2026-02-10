@@ -10,6 +10,12 @@ import {
   Link,
   LayoutGrid,
   Lock,
+  Filter,
+  Gift,
+  Coins,
+  Clock,
+  Sparkles,
+  Wand2,
 } from "lucide-react"
 import type { NodeSchema, PortType } from "@/lib/environment-schemas"
 
@@ -18,6 +24,14 @@ const portColors: Record<PortType, string> = {
   number: "!bg-emerald-400 hover:!bg-emerald-300",
   script: "!bg-amber-400 hover:!bg-amber-300",
   reference: "!bg-rose-400 hover:!bg-rose-300",
+  "stat-block": "!bg-cyan-400 hover:!bg-cyan-300",
+  "model-block": "!bg-violet-400 hover:!bg-violet-300",
+  condition: "!bg-orange-400 hover:!bg-orange-300",
+  reward: "!bg-yellow-400 hover:!bg-yellow-300",
+  cost: "!bg-pink-400 hover:!bg-pink-300",
+  timing: "!bg-teal-400 hover:!bg-teal-300",
+  effect: "!bg-indigo-400 hover:!bg-indigo-300",
+  fx: "!bg-fuchsia-400 hover:!bg-fuchsia-300",
 }
 
 const portBorderColors: Record<PortType, string> = {
@@ -25,6 +39,14 @@ const portBorderColors: Record<PortType, string> = {
   number: "!border-emerald-600",
   script: "!border-amber-600",
   reference: "!border-rose-600",
+  "stat-block": "!border-cyan-600",
+  "model-block": "!border-violet-600",
+  condition: "!border-orange-600",
+  reward: "!border-yellow-600",
+  cost: "!border-pink-600",
+  timing: "!border-teal-600",
+  effect: "!border-indigo-600",
+  fx: "!border-fuchsia-600",
 }
 
 const categoryIcons: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -33,6 +55,12 @@ const categoryIcons: Record<string, React.ComponentType<{ className?: string }>>
   script: Code,
   reference: Link,
   structured: LayoutGrid,
+  condition: Filter,
+  reward: Gift,
+  cost: Coins,
+  timing: Clock,
+  effect: Sparkles,
+  fx: Wand2,
 }
 
 interface SchemaNodeData {
@@ -47,6 +75,14 @@ function PortLabel({ label, portType, required, side }: { label: string; portTyp
     number: "bg-emerald-400",
     script: "bg-amber-400",
     reference: "bg-rose-400",
+    "stat-block": "bg-cyan-400",
+    "model-block": "bg-violet-400",
+    condition: "bg-orange-400",
+    reward: "bg-yellow-400",
+    cost: "bg-pink-400",
+    timing: "bg-teal-400",
+    effect: "bg-indigo-400",
+    fx: "bg-fuchsia-400",
   }
 
   return (
@@ -67,10 +103,12 @@ export function SchemaNode({ data }: NodeProps) {
   const Icon = categoryIcons[schema.category] || Database
   const isRoot = schema.category === "root"
 
-  // For the root node, show a compact field list of direct-input values (numbers that don't need connections)
-  const directInputs = schema.inputs.filter(
-    (p) => p.portType === "number" && !["stat_id", "weapon_item_id", "shield_item_id", "clothes_item_id", "skill_id", "state_id", "monster_skill_link_id", "drop_table_link_id", "selected_item_id", "selected_stat_id", "selected_skill_id", "selected_state_id"].includes(p.id),
-  )
+  // For the root node, show a compact field list of direct-input values
+  // (numbers that are NOT connected via foreign key / reference / structured ports)
+  const connectedPortTypes = new Set(["string-code", "script", "reference", "stat-block", "model-block", "condition", "reward", "cost", "timing", "effect", "fx"])
+  const directInputs = isRoot
+    ? schema.inputs.filter((p) => p.portType === "number" && !connectedPortTypes.has(p.portType))
+    : []
 
   return (
     <div className={`min-w-[240px] max-w-[300px] rounded-lg border bg-card shadow-lg ${schema.borderColor}`}>
@@ -179,6 +217,23 @@ export function SchemaNode({ data }: NodeProps) {
             <span className="mt-1 inline-block rounded bg-secondary px-1.5 py-0.5 text-[9px] font-medium text-foreground">
               ID: {String(values[schema.inputs[0].id])}
             </span>
+          )}
+        </div>
+      )}
+
+      {/* Category preview for cost / condition / reward / timing / effect / fx */}
+      {["condition", "reward", "cost", "timing", "effect", "fx"].includes(schema.category) && values && (
+        <div className="border-t border-border px-3 py-2">
+          <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+            {schema.inputs.slice(0, 4).map((input) => (
+              <div key={input.id} className="flex items-center justify-between gap-2">
+                <span className="truncate text-[10px] text-muted-foreground">{input.label}</span>
+                <span className="font-mono text-[10px] text-foreground">{String(values[input.id] ?? 0)}</span>
+              </div>
+            ))}
+          </div>
+          {schema.inputs.length > 4 && (
+            <p className="mt-1 text-[9px] text-muted-foreground/60">+{schema.inputs.length - 4} more fields</p>
           )}
         </div>
       )}
