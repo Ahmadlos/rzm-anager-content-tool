@@ -26,6 +26,7 @@ import {
   type EnvironmentId,
   environmentSchemas,
 } from "@/lib/environment-schemas"
+import type { SelectedEntity } from "@/lib/graph-store"
 
 // Manager imports
 import { NPCsManager } from "@/components/managers/npcs-manager"
@@ -128,7 +129,7 @@ function ManagerContent({
   onOpenCanvas,
 }: {
   envId: EnvironmentId
-  onOpenCanvas: () => void
+  onOpenCanvas: (entity?: SelectedEntity) => void
 }) {
   switch (envId) {
     case "npc":
@@ -155,11 +156,13 @@ type SubView = "manager" | "canvas" | "loading"
 
 export function EnvironmentShell({ envId, onBack }: EnvironmentShellProps) {
   const [subView, setSubView] = useState<SubView>("manager")
+  const [selectedEntity, setSelectedEntity] = useState<SelectedEntity | null>(null)
   const schema = environmentSchemas[envId]
   const envConfig = envIcons[envId]
   const Icon = envConfig.icon
 
-  const handleOpenCanvas = () => {
+  const handleOpenCanvas = (entity?: SelectedEntity) => {
+    setSelectedEntity(entity || null)
     setSubView("loading")
     setTimeout(() => setSubView("canvas"), 1200)
   }
@@ -172,7 +175,11 @@ export function EnvironmentShell({ envId, onBack }: EnvironmentShellProps) {
     return (
       <EnvironmentCanvas
         schema={schema}
-        onBack={() => setSubView("manager")}
+        entity={selectedEntity}
+        onBack={() => {
+          setSubView("manager")
+          setSelectedEntity(null)
+        }}
       />
     )
   }

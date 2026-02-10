@@ -44,6 +44,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import type { SelectedEntity } from "@/lib/graph-store"
 
 interface NPC {
   id: number
@@ -65,7 +66,7 @@ const initialNPCs: NPC[] = [
 ]
 
 interface NPCsManagerProps {
-  onOpenCanvas: () => void
+  onOpenCanvas: (entity?: SelectedEntity) => void
 }
 
 type ViewMode = "list" | "cards"
@@ -257,6 +258,9 @@ export function NPCsManager({ onOpenCanvas }: NPCsManagerProps) {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="bg-card border-border">
+                          <DropdownMenuItem onClick={() => onOpenCanvas({ id: npc.id, name: npc.name })} className="gap-2">
+                            <GitBranch className="h-4 w-4" /> Edit Graph
+                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => handleEdit(npc)} className="gap-2">
                             <Edit className="h-4 w-4" /> Edit
                           </DropdownMenuItem>
@@ -303,6 +307,9 @@ export function NPCsManager({ onOpenCanvas }: NPCsManagerProps) {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="bg-card border-border">
+                      <DropdownMenuItem onClick={() => onOpenCanvas({ id: npc.id, name: npc.name })} className="gap-2">
+                        <GitBranch className="h-4 w-4" /> Edit Graph
+                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleEdit(npc)} className="gap-2">
                         <Edit className="h-4 w-4" /> Edit
                       </DropdownMenuItem>

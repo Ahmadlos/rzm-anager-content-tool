@@ -37,6 +37,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import type { SelectedEntity } from "@/lib/graph-store"
 
 interface Item {
   id: number
@@ -60,7 +61,7 @@ const initialItems: Item[] = [
 ]
 
 interface ItemsManagerProps {
-  onOpenCanvas?: () => void
+  onOpenCanvas?: (entity?: SelectedEntity) => void
 }
 
 export function ItemsManager({ onOpenCanvas }: ItemsManagerProps = {}) {
@@ -224,6 +225,9 @@ export function ItemsManager({ onOpenCanvas }: ItemsManagerProps = {}) {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="bg-card border-border">
+                      <DropdownMenuItem onClick={() => onOpenCanvas?.({ id: item.id, name: item.name })} className="gap-2">
+                        <GitBranch className="h-4 w-4" /> Edit Graph
+                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleEdit(item)} className="gap-2">
                         <Edit className="h-4 w-4" /> Edit
                       </DropdownMenuItem>

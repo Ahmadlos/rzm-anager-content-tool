@@ -56,13 +56,71 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { createNodeTypes } from "./schema-nodes"
+import { ExportPipelineDialog } from "./export-pipeline-dialog"
 import {
   type EnvironmentSchema,
   type NodeSchema,
   type ValidationError,
   validateGraph,
 } from "@/lib/environment-schemas"
+import {
+  type SelectedEntity,
+  loadGraph,
+  saveGraph,
+} from "@/lib/graph-store"
+
+// ---- Constants ----
+
+const LANGUAGE_CODES = ["ME", "US", "RS", "CN", "DE", "FR", "HK", "JP", "KR", "TW"] as const
+
+// Reference data for dropdown selection (simulated entries)
+const REFERENCE_DATA: Record<string, { id: number; name: string }[]> = {
+  selected_item_id: [
+    { id: 1001, name: "Iron Sword" },
+    { id: 1002, name: "Healing Potion" },
+    { id: 1003, name: "Dragon Scale Shield" },
+    { id: 1004, name: "Shadow Cloak" },
+    { id: 1005, name: "Elven Bow" },
+  ],
+  selected_stat_id: [
+    { id: 1, name: "Warrior Stats" },
+    { id: 2, name: "Mage Stats" },
+    { id: 3, name: "Rogue Stats" },
+    { id: 4, name: "Healer Stats" },
+  ],
+  selected_skill_id: [
+    { id: 1, name: "Fireball" },
+    { id: 2, name: "Ice Shield" },
+    { id: 3, name: "Shadow Strike" },
+    { id: 4, name: "Healing Light" },
+  ],
+  selected_state_id: [
+    { id: 1, name: "Burning" },
+    { id: 2, name: "Frozen" },
+    { id: 3, name: "Blessed" },
+    { id: 4, name: "Poisoned" },
+  ],
+  selected_skill_link_id: [
+    { id: 101, name: "Basic Attack Set" },
+    { id: 102, name: "Fire Breath Skills" },
+    { id: 103, name: "Shadow Magic Set" },
+    { id: 104, name: "Golem Slam Skills" },
+  ],
+  selected_drop_table_id: [
+    { id: 201, name: "Common Drops" },
+    { id: 202, name: "Rare Dragon Loot" },
+    { id: 203, name: "Undead Remains" },
+    { id: 204, name: "Elemental Cores" },
+  ],
+}
 
 // ---- Default data generators ----
 
@@ -152,21 +210,42 @@ function createDefaultEdges(schema: EnvironmentSchema, nodes: Node[]): Edge[] {
 
 interface EnvironmentCanvasProps {
   schema: EnvironmentSchema
+  entity?: SelectedEntity | null
   onBack: () => void
 }
 
 const nodeTypes = createNodeTypes()
 
-function CanvasInner({ schema, onBack }: EnvironmentCanvasProps) {
-  const initialNodes = useMemo(() => createDefaultNodes(schema), [schema])
-  const initialEdges = useMemo(() => createDefaultEdges(schema, initialNodes), [schema, initialNodes])
+function CanvasInner({ schema, entity, onBack }: EnvironmentCanvasProps) {
+  // Load persisted graph for this entity, or create defaults
+  const saved = useMemo(
+    () => (entity ? loadGraph(schema.id, entity.id) : null),
+    [schema.id, entity],
+  )
+  const initialNodes = useMemo(
+    () => saved?.nodes ?? createDefaultNodes(schema),
+    [saved, schema],
+  )
+  const initialEdges = useMemo(
+    () => saved?.edges ?? createDefaultEdges(schema, initialNodes),
+    [saved, schema, initialNodes],
+  )
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
-  const [nodeCount, setNodeCount] = useState(2)
+  const [nodeCount, setNodeCount] = useState(initialNodes.length + 1)
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
 
-  const [projectName, setProjectName] = useState(`New ${schema.title.replace(" Environment", "")} Entity`)
+  const [projectName, setProjectName] = useState(
+    saved?.projectName ?? entity?.name ?? `New ${schema.title.replace(" Environment", "")} Entity`,
+  )
+
+  // Auto-save graph when nodes/edges change
+  useEffect(() => {
+    if (entity) {
+      saveGraph(schema.id, entity.id, { nodes, edges, projectName })
+    }
+  }, [nodes, edges, projectName, entity, schema.id])
   const [isEditingName, setIsEditingName] = useState(false)
   const [editNameValue, setEditNameValue] = useState(projectName)
   const nameInputRef = useRef<HTMLInputElement>(null)
@@ -178,6 +257,7 @@ function CanvasInner({ schema, onBack }: EnvironmentCanvasProps) {
   const [copied, setCopied] = useState(false)
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([])
   const [showValidation, setShowValidation] = useState(false)
+  const [showExportDialog, setShowExportDialog] = useState(false)
 
   const edgeReconnectSuccessful = useRef(true)
   const { zoomIn, zoomOut, fitView, setCenter } = useReactFlow()
@@ -372,9 +452,14 @@ function CanvasInner({ schema, onBack }: EnvironmentCanvasProps) {
     setShowValidation(true)
   }, [schema, nodes, edges])
 
-  // Export
-  const handleExport = useCallback(() => {
+  // Export - open the pipeline dialog
+  const handleOpenExport = useCallback(() => {
     runValidation()
+    setShowExportDialog(true)
+  }, [runValidation])
+
+  // Download JSON after pipeline completes
+  const handleDownloadExport = useCallback(() => {
     const data = {
       environment: schema.id,
       projectName,
@@ -399,7 +484,7 @@ function CanvasInner({ schema, onBack }: EnvironmentCanvasProps) {
     a.download = `${projectName.replace(/\s+/g, "_").toLowerCase()}_export.json`
     a.click()
     URL.revokeObjectURL(url)
-  }, [schema, projectName, nodes, edges, runValidation])
+  }, [schema, projectName, nodes, edges])
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -596,7 +681,7 @@ function CanvasInner({ schema, onBack }: EnvironmentCanvasProps) {
             variant="outline"
             size="sm"
             className="gap-1.5 bg-transparent text-xs"
-            onClick={handleExport}
+            onClick={handleOpenExport}
           >
             <Download className="h-3 w-3" /> Export
           </Button>
@@ -896,49 +981,86 @@ function CanvasInner({ schema, onBack }: EnvironmentCanvasProps) {
                     Fields
                   </p>
 
-                  {selectedSchema.inputs.map((input) => (
-                    <div key={input.id} className="flex flex-col gap-1.5">
-                      <Label className="flex items-center gap-1 text-xs text-foreground">
-                        {input.label}
-                        {input.required && (
-                          <span className="text-destructive">*</span>
+                  {selectedSchema.inputs.map((input) => {
+                    const isLanguageField = input.id === "language"
+                    const isReferenceSelect = REFERENCE_DATA[input.id] !== undefined
+
+                    return (
+                      <div key={input.id} className="flex flex-col gap-1.5">
+                        <Label className="flex items-center gap-1 text-xs text-foreground">
+                          {input.label}
+                          {input.required && (
+                            <span className="text-destructive">*</span>
+                          )}
+                          <Badge
+                            variant="outline"
+                            className="ml-auto border-border px-1 text-[9px] text-muted-foreground"
+                          >
+                            {input.portType}
+                          </Badge>
+                        </Label>
+                        {isLanguageField ? (
+                          <Select
+                            value={String(selectedValues[input.id] ?? "US")}
+                            onValueChange={(v) => updateNodeValue(input.id, v)}
+                          >
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {LANGUAGE_CODES.map((code) => (
+                                <SelectItem key={code} value={code} className="text-xs">
+                                  {code}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : isReferenceSelect ? (
+                          <Select
+                            value={String(selectedValues[input.id] ?? "")}
+                            onValueChange={(v) => updateNodeValue(input.id, Number(v))}
+                          >
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue placeholder="Select..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {REFERENCE_DATA[input.id]?.map((ref) => (
+                                <SelectItem key={ref.id} value={String(ref.id)} className="text-xs">
+                                  {ref.name} (#{ref.id})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : input.portType === "number" ? (
+                          <Input
+                            type="number"
+                            value={Number(selectedValues[input.id] ?? 0)}
+                            onChange={(e) =>
+                              updateNodeValue(input.id, Number(e.target.value))
+                            }
+                            className="h-8 text-xs"
+                          />
+                        ) : input.portType === "script" ? (
+                          <Textarea
+                            value={String(selectedValues[input.id] ?? "")}
+                            onChange={(e) =>
+                              updateNodeValue(input.id, e.target.value)
+                            }
+                            className="font-mono text-xs"
+                            rows={3}
+                          />
+                        ) : (
+                          <Input
+                            value={String(selectedValues[input.id] ?? "")}
+                            onChange={(e) =>
+                              updateNodeValue(input.id, e.target.value)
+                            }
+                            className="h-8 text-xs"
+                          />
                         )}
-                        <Badge
-                          variant="outline"
-                          className="ml-auto border-border px-1 text-[9px] text-muted-foreground"
-                        >
-                          {input.portType}
-                        </Badge>
-                      </Label>
-                      {input.portType === "number" ? (
-                        <Input
-                          type="number"
-                          value={Number(selectedValues[input.id] ?? 0)}
-                          onChange={(e) =>
-                            updateNodeValue(input.id, Number(e.target.value))
-                          }
-                          className="h-8 text-xs"
-                        />
-                      ) : input.portType === "script" ? (
-                        <Textarea
-                          value={String(selectedValues[input.id] ?? "")}
-                          onChange={(e) =>
-                            updateNodeValue(input.id, e.target.value)
-                          }
-                          className="font-mono text-xs"
-                          rows={3}
-                        />
-                      ) : (
-                        <Input
-                          value={String(selectedValues[input.id] ?? "")}
-                          onChange={(e) =>
-                            updateNodeValue(input.id, e.target.value)
-                          }
-                          className="h-8 text-xs"
-                        />
-                      )}
-                    </div>
-                  ))}
+                      </div>
+                    )
+                  })}
 
                   {selectedSchema.outputs.length > 0 && (
                     <>
@@ -966,15 +1088,25 @@ function CanvasInner({ schema, onBack }: EnvironmentCanvasProps) {
             </div>
           )}
         </div>
+
+        {/* Export Pipeline Dialog */}
+        <ExportPipelineDialog
+          open={showExportDialog}
+          onClose={() => setShowExportDialog(false)}
+          validationErrors={validationErrors}
+          onExport={handleDownloadExport}
+          environmentTitle={schema.title}
+          projectName={projectName}
+        />
       </div>
     </TooltipProvider>
   )
 }
 
-export function EnvironmentCanvas({ schema, onBack }: EnvironmentCanvasProps) {
+export function EnvironmentCanvas({ schema, entity, onBack }: EnvironmentCanvasProps) {
   return (
     <ReactFlowProvider>
-      <CanvasInner schema={schema} onBack={onBack} />
+      <CanvasInner schema={schema} entity={entity} onBack={onBack} />
     </ReactFlowProvider>
   )
 }

@@ -166,13 +166,20 @@ export function SchemaNode({ data }: NodeProps) {
         </div>
       )}
 
-      {/* Reference Node Value */}
-      {schema.category === "reference" && (
+      {/* Reference / Structured Node Value */}
+      {(schema.category === "reference" || schema.category === "structured") && (
         <div className="border-t border-border px-3 py-2">
           <div className="flex items-center gap-2">
             <Link className="h-3 w-3 text-muted-foreground" />
-            <span className="text-[10px] text-muted-foreground">Read-only reference</span>
+            <span className="text-[10px] text-muted-foreground">
+              {schema.category === "reference" ? "Read-only reference" : "Linked resource"}
+            </span>
           </div>
+          {values && schema.inputs[0] && values[schema.inputs[0].id] !== undefined && Number(values[schema.inputs[0].id]) > 0 && (
+            <span className="mt-1 inline-block rounded bg-secondary px-1.5 py-0.5 text-[9px] font-medium text-foreground">
+              ID: {String(values[schema.inputs[0].id])}
+            </span>
+          )}
         </div>
       )}
 

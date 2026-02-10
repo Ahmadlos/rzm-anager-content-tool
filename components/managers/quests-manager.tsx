@@ -37,6 +37,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
+import type { SelectedEntity } from "@/lib/graph-store"
 
 interface Quest {
   id: number
@@ -59,7 +60,7 @@ const initialQuests: Quest[] = [
 ]
 
 interface QuestsManagerProps {
-  onOpenCanvas?: () => void
+  onOpenCanvas?: (entity?: SelectedEntity) => void
 }
 
 export function QuestsManager({ onOpenCanvas }: QuestsManagerProps = {}) {
@@ -251,6 +252,9 @@ export function QuestsManager({ onOpenCanvas }: QuestsManagerProps = {}) {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="bg-card border-border">
+                      <DropdownMenuItem onClick={() => onOpenCanvas?.({ id: quest.id, name: quest.name })} className="gap-2">
+                        <GitBranch className="h-4 w-4" /> Edit Graph
+                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleEdit(quest)} className="gap-2">
                         <Edit className="h-4 w-4" /> Edit
                       </DropdownMenuItem>

@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import type { SelectedEntity } from "@/lib/graph-store"
 
 interface StateEntity {
   id: number
@@ -78,7 +79,7 @@ const initialStates: StateEntity[] = [
 ]
 
 interface StatesManagerProps {
-  onOpenCanvas: () => void
+  onOpenCanvas: (entity?: SelectedEntity) => void
 }
 
 export function StatesManager({ onOpenCanvas }: StatesManagerProps) {
@@ -295,6 +296,12 @@ export function StatesManager({ onOpenCanvas }: StatesManagerProps) {
                       align="end"
                       className="border-border bg-card"
                     >
+                      <DropdownMenuItem
+                        onClick={() => onOpenCanvas({ id: state.id, name: state.name })}
+                        className="gap-2"
+                      >
+                        <GitBranch className="h-4 w-4" /> Edit Graph
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => handleEdit(state)}
                         className="gap-2"

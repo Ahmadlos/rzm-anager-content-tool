@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Progress } from "@/components/ui/progress"
+import type { SelectedEntity } from "@/lib/graph-store"
 
 interface Monster {
   id: number
@@ -63,7 +64,7 @@ const initialMonsters: Monster[] = [
 ]
 
 interface MonstersManagerProps {
-  onOpenCanvas?: () => void
+  onOpenCanvas?: (entity?: SelectedEntity) => void
 }
 
 export function MonstersManager({ onOpenCanvas }: MonstersManagerProps = {}) {
@@ -258,6 +259,9 @@ export function MonstersManager({ onOpenCanvas }: MonstersManagerProps = {}) {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="bg-card border-border">
+                      <DropdownMenuItem onClick={() => onOpenCanvas?.({ id: monster.id, name: monster.name })} className="gap-2">
+                        <GitBranch className="h-4 w-4" /> Edit Graph
+                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleEdit(monster)} className="gap-2">
                         <Edit className="h-4 w-4" /> Edit
                       </DropdownMenuItem>

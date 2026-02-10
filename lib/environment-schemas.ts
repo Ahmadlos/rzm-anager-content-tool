@@ -317,10 +317,52 @@ export const monsterSchema: EnvironmentSchema = {
         { id: "script_on_dead", label: "script_on_dead", portType: "script" },
       ],
     },
+    {
+      type: "stat-node",
+      label: "Stat Node",
+      category: "structured",
+      color: "bg-cyan-500/10 text-cyan-400",
+      borderColor: "border-cyan-500/20",
+      inputs: [
+        { id: "selected_stat_id", label: "selected_stat_id", portType: "number" },
+      ],
+      outputs: [
+        { id: "stat_id", label: "stat_id", portType: "number" },
+      ],
+    },
+    {
+      type: "ref-monster-skill",
+      label: "Monster Skill Link",
+      category: "reference",
+      color: "bg-rose-500/10 text-rose-400",
+      borderColor: "border-rose-500/20",
+      inputs: [
+        { id: "selected_skill_link_id", label: "selected_skill_link_id", portType: "number" },
+      ],
+      outputs: [
+        { id: "monster_skill_link_id", label: "monster_skill_link_id", portType: "number" },
+      ],
+    },
+    {
+      type: "ref-drop-table",
+      label: "Drop Table Link",
+      category: "reference",
+      color: "bg-rose-500/10 text-rose-400",
+      borderColor: "border-rose-500/20",
+      inputs: [
+        { id: "selected_drop_table_id", label: "selected_drop_table_id", portType: "number" },
+      ],
+      outputs: [
+        { id: "drop_table_link_id", label: "drop_table_link_id", portType: "number" },
+      ],
+    },
   ],
   connectionRules: [
     { sourceNodeType: "string-node", sourcePort: "code", targetNodeType: "monster-root", targetPort: "name_id" },
     { sourceNodeType: "script-on-dead", sourcePort: "script_on_dead", targetNodeType: "monster-root", targetPort: "script_on_dead" },
+    { sourceNodeType: "stat-node", sourcePort: "stat_id", targetNodeType: "monster-root", targetPort: "stat_id" },
+    { sourceNodeType: "ref-monster-skill", sourcePort: "monster_skill_link_id", targetNodeType: "monster-root", targetPort: "monster_skill_link_id" },
+    { sourceNodeType: "ref-drop-table", sourcePort: "drop_table_link_id", targetNodeType: "monster-root", targetPort: "drop_table_link_id" },
   ],
 }
 
