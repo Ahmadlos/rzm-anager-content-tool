@@ -18,6 +18,7 @@ import {
   Layers,
   Database,
   GitCommit,
+  Eye,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -149,9 +150,10 @@ interface DashboardHubProps {
   onOpenConnectionManager?: () => void
   onOpenWorkspaceManager?: () => void
   onOpenStaging?: () => void
+  onOpenDatabaseExplorer?: () => void
 }
 
-export function DashboardHub({ onEnterEnvironment, onOpenConnectionManager, onOpenWorkspaceManager, onOpenStaging }: DashboardHubProps) {
+export function DashboardHub({ onEnterEnvironment, onOpenConnectionManager, onOpenWorkspaceManager, onOpenStaging, onOpenDatabaseExplorer }: DashboardHubProps) {
   const [search, setSearch] = useState("")
   const [hoveredCard, setHoveredCard] = useState<string | null>(null)
   const activeWorkspace = getActiveWorkspace()
@@ -190,6 +192,21 @@ export function DashboardHub({ onEnterEnvironment, onOpenConnectionManager, onOp
                 className="h-8 pl-9 text-xs"
               />
             </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground"
+                  onClick={onOpenDatabaseExplorer}
+                >
+                  <Eye className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent className="border-border bg-card text-foreground">
+                <span className="text-xs">Database Explorer</span>
+              </TooltipContent>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -330,8 +347,8 @@ export function DashboardHub({ onEnterEnvironment, onOpenConnectionManager, onOp
               ))}
             </div>
 
-            {/* Workspace + Connection + Staging Quick Access */}
-            <div className="mt-8 grid grid-cols-1 gap-3 md:grid-cols-3">
+            {/* Workspace + Connection + Explorer + Staging Quick Access */}
+            <div className="mt-8 grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
               <button
                 onClick={onOpenWorkspaceManager}
                 className="group flex items-center gap-4 rounded-xl border border-border bg-card p-4 text-left transition-all duration-200 hover:border-muted-foreground/30 hover:shadow-lg hover:shadow-background/80"
@@ -364,6 +381,23 @@ export function DashboardHub({ onEnterEnvironment, onOpenConnectionManager, onOp
                   </h3>
                   <p className="text-xs text-muted-foreground">
                     Manage server profiles, SSH tunnels, and credentials
+                  </p>
+                </div>
+                <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+              </button>
+              <button
+                onClick={onOpenDatabaseExplorer}
+                className="group flex items-center gap-4 rounded-xl border border-border bg-card p-4 text-left transition-all duration-200 hover:border-muted-foreground/30 hover:shadow-lg hover:shadow-background/80"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-foreground/5">
+                  <Eye className="h-5 w-5 text-foreground/70" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Database Explorer
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Inspect tables, views, and stored procedures (read-only)
                   </p>
                 </div>
                 <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />

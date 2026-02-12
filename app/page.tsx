@@ -7,9 +7,10 @@ import { EnvironmentShell } from "@/components/environments/environment-shell"
 import { ConnectionManager } from "@/components/database/connection-manager"
 import { WorkspaceManager } from "@/components/workspace/workspace-manager"
 import { StagingView } from "@/components/staging/staging-view"
+import { DatabaseExplorer } from "@/components/database/database-explorer"
 import type { EnvironmentId } from "@/lib/environment-schemas"
 
-type AppView = "dashboard" | "loading" | "connection-manager" | "workspace-manager" | "staging" | EnvironmentId
+type AppView = "dashboard" | "loading" | "connection-manager" | "workspace-manager" | "staging" | "db-explorer" | EnvironmentId
 
 export default function App() {
   const [view, setView] = useState<AppView>("dashboard")
@@ -45,6 +46,7 @@ export default function App() {
         onOpenConnectionManager={() => setView("connection-manager")}
         onOpenWorkspaceManager={() => setView("workspace-manager")}
         onOpenStaging={() => setView("staging")}
+        onOpenDatabaseExplorer={() => setView("db-explorer")}
       />
     )
   }
@@ -69,6 +71,10 @@ export default function App() {
         onOpenWorkspaceManager={() => setView("workspace-manager")}
       />
     )
+  }
+
+  if (view === "db-explorer") {
+    return <DatabaseExplorer onBack={handleBack} />
   }
 
   // All environment IDs use the unified EnvironmentShell

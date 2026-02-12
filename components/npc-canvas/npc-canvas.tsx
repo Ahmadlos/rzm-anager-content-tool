@@ -46,13 +46,25 @@ import {
   Pencil,
   Copy,
   Check,
+  GitBranch,
+  Circle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Separator } from "@/components/ui/separator"
+import { Badge } from "@/components/ui/badge"
 import { npcNodeTypes } from "./npc-nodes"
+import { LocalChangesPanel } from "./local-changes-panel"
+import {
+  saveSnapshot,
+  updateCurrentState,
+  isEntityModified,
+  getAllTrackedEntities,
+  getModifiedCount,
+  type TrackedEntity,
+} from "@/lib/npc-tracking-store"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -412,6 +424,45 @@ function NPCCanvasInner({ onBack }: NPCCanvasProps) {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null)
   const [activeTool, setActiveTool] = useState("select")
   const [activeView, setActiveView] = useState<ViewTab>("canvas")
+
+  // Change tracking state
+  const ENTITY_ID = "npc-default-project"
+  const [showChanges, setShowChanges] = useState(false)
+  const [trackedEntities, setTrackedEntities] = useState<TrackedEntity[]>([])
+  const [isModified, setIsModified] = useState(false)
+  const snapshotSaved = useRef(false)
+
+  // Save initial snapshot on first render
+  useEffect(() => {
+    if (!snapshotSaved.current) {
+      saveSnapshot(ENTITY_ID, "New NPC Project", defaultNodes, defaultEdges)
+      updateCurrentState(ENTITY_ID, defaultNodes, defaultEdges)
+      snapshotSaved.current = true
+    }
+  }, [])
+
+  // Track changes on every node/edge update
+  useEffect(() => {
+    if (snapshotSaved.current) {
+      updateCurrentState(ENTITY_ID, nodes, edges)
+      setIsModified(isEntityModified(ENTITY_ID))
+      setTrackedEntities(getAllTrackedEntities())
+    }
+  }, [nodes, edges])
+
+  const refreshTracking = useCallback(() => {
+    setTrackedEntities(getAllTrackedEntities())
+    setIsModified(isEntityModified(ENTITY_ID))
+  }, [])
+
+  const handleRevertEntity = useCallback(
+    (_entityId: string, revertedNodes: Node[], revertedEdges: Edge[]) => {
+      setNodes(revertedNodes)
+      setEdges(revertedEdges)
+      setSelectedNode(null)
+    },
+    [setNodes, setEdges],
+  )
 
   // Project name state
   const [projectName, setProjectName] = useState("New NPC Project")
@@ -886,6 +937,9 @@ function NPCCanvasInner({ onBack }: NPCCanvasProps) {
                 onClick={startEditingName}
                 className="group flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-secondary"
               >
+                {isModified && (
+                  <span className="text-amber-400 text-sm leading-none" title="Modified">{"●"}</span>
+                )}
                 {projectName}
                 <Pencil className="h-3 w-3 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
               </button>
@@ -912,6 +966,22 @@ function NPCCanvasInner({ onBack }: NPCCanvasProps) {
                   ))}
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              {/* Changes toggle with modified indicator */}
+              <Button
+                variant={showChanges ? "secondary" : "outline"}
+                size="sm"
+                className="gap-1.5 bg-transparent text-xs relative"
+                onClick={() => setShowChanges(!showChanges)}
+              >
+                <GitBranch className="h-3 w-3" />
+                Changes
+                {isModified && (
+                  <Circle className="h-2 w-2 text-amber-400 fill-amber-400 absolute -top-0.5 -right-0.5" />
+                )}
+              </Button>
+
+              <div className="h-4 w-px bg-border" />
 
               <Button variant="outline" size="sm" className="gap-1.5 bg-transparent text-xs">
                 <Save className="h-3 w-3" />
@@ -1321,6 +1391,25 @@ function NPCCanvasInner({ onBack }: NPCCanvasProps) {
                   Delete Node
                 </Button>
               </div>
+            </div>
+          )}
+
+          {/* Local Changes Panel (collapsible) */}
+          {showChanges && activeView === "canvas" && (
+            <div className="flex w-72 flex-col border-l border-border bg-card/50">
+              <LocalChangesPanel
+                trackedEntities={trackedEntities}
+                onRevert={handleRevertEntity}
+                onSelectEntity={(entityId) => {
+                  // Focus on the entity's first node
+                  const entity = trackedEntities.find((e) => e.entityId === entityId)
+                  if (entity && entity.currentNodes.length > 0) {
+                    const node = entity.currentNodes[0]
+                    setCenter(node.position.x + 110, node.position.y + 60, { zoom: 1.2, duration: 600 })
+                  }
+                }}
+                onRefresh={refreshTracking}
+              />
             </div>
           )}
         </div>
