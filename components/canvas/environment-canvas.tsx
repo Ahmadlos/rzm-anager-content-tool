@@ -238,6 +238,9 @@ function CanvasInner({ schema, onBack }: EnvironmentCanvasProps) {
     setSnapshot(createSnapshot(nodes, edges))
   }, [nodes, edges])
 
+  const edgeReconnectSuccessful = useRef(true)
+  const { zoomIn, zoomOut, fitView, setCenter } = useReactFlow()
+
   const handleNavigateToChangedNode = useCallback(
     (nodeId: string) => {
       const node = nodes.find((n) => n.id === nodeId)
@@ -249,9 +252,6 @@ function CanvasInner({ schema, onBack }: EnvironmentCanvasProps) {
     },
     [nodes, setCenter, setNodes]
   )
-
-  const edgeReconnectSuccessful = useRef(true)
-  const { zoomIn, zoomOut, fitView, setCenter } = useReactFlow()
 
   // --- Connection validation ---
   const isValidConnection = useCallback(

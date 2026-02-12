@@ -16,10 +16,24 @@ import {
   Settings,
   FolderOpen,
   Layers,
+  Database,
+  GitBranch,
+  Wrench,
+  TableProperties,
+  GitCompare,
+  LayoutGrid,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu"
 import {
   Tooltip,
   TooltipContent,
@@ -171,8 +185,8 @@ export function DashboardHub({ onEnterEnvironment }: DashboardHubProps) {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="relative w-64">
+          <div className="flex items-center gap-2">
+            <div className="relative w-56">
               <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search environments..."
@@ -181,6 +195,50 @@ export function DashboardHub({ onEnterEnvironment }: DashboardHubProps) {
                 className="h-8 pl-9 text-xs"
               />
             </div>
+
+            <div className="mx-1 h-5 w-px bg-border" />
+
+            <Button variant="outline" size="sm" className="gap-1.5 bg-transparent text-xs">
+              <LayoutGrid className="h-3 w-3" />
+              Workspaces
+            </Button>
+
+            <Button variant="outline" size="sm" className="gap-1.5 bg-transparent text-xs">
+              <Database className="h-3 w-3" />
+              Database Connections
+            </Button>
+
+            <Button variant="outline" size="sm" className="gap-1.5 bg-transparent text-xs">
+              <GitBranch className="h-3 w-3" />
+              {"Commit & Deploy"}
+            </Button>
+
+            {/* Tools Dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5 bg-transparent text-xs">
+                  <Wrench className="h-3 w-3" />
+                  Tools
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52 border-border bg-card">
+                <DropdownMenuLabel className="text-xs text-muted-foreground">
+                  Developer Tools
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="gap-2 text-xs">
+                  <TableProperties className="h-3.5 w-3.5 text-muted-foreground" />
+                  Database Explorer
+                </DropdownMenuItem>
+                <DropdownMenuItem className="gap-2 text-xs">
+                  <GitCompare className="h-3.5 w-3.5 text-muted-foreground" />
+                  DB Comparison
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <div className="mx-1 h-5 w-px bg-border" />
+
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
