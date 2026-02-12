@@ -38,6 +38,7 @@ const categoryIcons: Record<string, React.ComponentType<{ className?: string }>>
 interface SchemaNodeData {
   schema: NodeSchema
   values: Record<string, unknown>
+  isModified?: boolean
   [key: string]: unknown
 }
 
@@ -61,7 +62,7 @@ function PortLabel({ label, portType, required, side }: { label: string; portTyp
 }
 
 export function SchemaNode({ data }: NodeProps) {
-  const { schema, values } = data as unknown as SchemaNodeData
+  const { schema, values, isModified } = data as unknown as SchemaNodeData
   if (!schema) return null
 
   const Icon = categoryIcons[schema.category] || Database
@@ -73,7 +74,7 @@ export function SchemaNode({ data }: NodeProps) {
   )
 
   return (
-    <div className={`min-w-[240px] max-w-[300px] rounded-lg border bg-card shadow-lg ${schema.borderColor}`}>
+    <div className={`min-w-[240px] max-w-[300px] rounded-lg border bg-card shadow-lg ${isModified ? "border-amber-500/40 ring-1 ring-amber-500/20" : schema.borderColor}`}>
       {/* Input Handles */}
       {schema.inputs.map((input, i) => (
         <Handle
@@ -90,7 +91,13 @@ export function SchemaNode({ data }: NodeProps) {
       <div className={`flex items-center gap-2 rounded-t-lg border-b border-border px-3 py-2 ${schema.color}`}>
         {isRoot ? <Lock className="h-3 w-3" /> : <Icon className="h-3 w-3" />}
         <span className="text-xs font-semibold uppercase tracking-wider">{schema.label}</span>
-        {isRoot && (
+        {isModified && (
+          <span className="ml-auto flex items-center gap-1 rounded bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-medium text-amber-300" title="Modified">
+            <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-400" />
+            Modified
+          </span>
+        )}
+        {isRoot && !isModified && (
           <span className="ml-auto rounded bg-background/20 px-1.5 py-0.5 text-[9px] font-medium">ROOT</span>
         )}
       </div>

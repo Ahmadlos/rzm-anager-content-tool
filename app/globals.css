@@ -169,6 +169,11 @@
   border-radius: 6px;
 }
 
+/* Modified node glow for change tracking */
+.react-flow__node [data-modified="true"] {
+  box-shadow: 0 0 12px oklch(0.7 0.15 85 / 0.15);
+}
+
 /* Edge hover for reconnection */
 .react-flow__edge:hover .react-flow__edge-path {
   stroke: oklch(0.55 0 0) !important;

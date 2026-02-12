@@ -34,6 +34,8 @@ import {
   AlertTriangle,
   CheckCircle,
   ChevronRight,
+  GitCompare,
+  RotateCcw,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -57,12 +59,23 @@ import {
 } from "@/components/ui/tooltip"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { createNodeTypes } from "./schema-nodes"
+import { ChangesPanel } from "./changes-panel"
 import {
   type EnvironmentSchema,
   type NodeSchema,
   type ValidationError,
   validateGraph,
 } from "@/lib/environment-schemas"
+import {
+  type GraphSnapshot,
+  type ChangesSummary,
+  createSnapshot,
+  computeChanges,
+  revertField,
+  revertAll,
+  getModifiedNodeIds,
+  getModifiedFieldsForNode,
+} from "@/lib/change-tracker"
 
 // ---- Default data generators ----
 
@@ -178,6 +191,64 @@ function CanvasInner({ schema, onBack }: EnvironmentCanvasProps) {
   const [copied, setCopied] = useState(false)
   const [validationErrors, setValidationErrors] = useState<ValidationError[]>([])
   const [showValidation, setShowValidation] = useState(false)
+
+  // ---- Change Tracking ----
+  const [snapshot, setSnapshot] = useState<GraphSnapshot>(() =>
+    createSnapshot(initialNodes, initialEdges)
+  )
+  const [showChangesPanel, setShowChangesPanel] = useState(false)
+
+  const changes: ChangesSummary = useMemo(
+    () => computeChanges(snapshot, nodes, edges),
+    [snapshot, nodes, edges]
+  )
+
+  const modifiedNodeIds = useMemo(
+    () => getModifiedNodeIds(changes),
+    [changes]
+  )
+
+  const selectedModifiedFields = useMemo(() => {
+    if (!selectedNode) return new Set<string>()
+    return getModifiedFieldsForNode(changes, selectedNode.id)
+  }, [changes, selectedNode])
+
+  const handleRevertField = useCallback(
+    (nodeId: string, fieldName: string) => {
+      const reverted = revertField(snapshot, nodes, nodeId, fieldName)
+      setNodes(reverted)
+      // Update selectedNode if it was the one reverted
+      if (selectedNode?.id === nodeId) {
+        const updated = reverted.find((n) => n.id === nodeId)
+        if (updated) setSelectedNode(updated)
+      }
+    },
+    [snapshot, nodes, setNodes, selectedNode]
+  )
+
+  const handleRevertAll = useCallback(() => {
+    const { nodes: restoredNodes, edges: restoredEdges } = revertAll(snapshot, nodes)
+    setNodes(restoredNodes)
+    setEdges(restoredEdges)
+    setSelectedNode(null)
+  }, [snapshot, nodes, setNodes, setEdges])
+
+  const handleClearChanges = useCallback(() => {
+    // Accept current state as new baseline
+    setSnapshot(createSnapshot(nodes, edges))
+  }, [nodes, edges])
+
+  const handleNavigateToChangedNode = useCallback(
+    (nodeId: string) => {
+      const node = nodes.find((n) => n.id === nodeId)
+      if (node) {
+        setCenter(node.position.x + 120, node.position.y + 60, { zoom: 1.2, duration: 600 })
+        setSelectedNode(node)
+        setNodes((nds) => nds.map((n) => ({ ...n, selected: n.id === node.id })))
+      }
+    },
+    [nodes, setCenter, setNodes]
+  )
 
   const edgeReconnectSuccessful = useRef(true)
   const { zoomIn, zoomOut, fitView, setCenter } = useReactFlow()
@@ -486,6 +557,17 @@ function CanvasInner({ schema, onBack }: EnvironmentCanvasProps) {
     setSearchQuery("")
   }
 
+  // Inject isModified flag into node data for visual indicators
+  const displayNodes = useMemo(() => {
+    return nodes.map((n) => ({
+      ...n,
+      data: {
+        ...(n.data as Record<string, unknown>),
+        isModified: modifiedNodeIds.has(n.id),
+      },
+    }))
+  }, [nodes, modifiedNodeIds])
+
   // Selected node info
   const selectedSchema = selectedNode
     ? (selectedNode.data as { schema?: NodeSchema }).schema
@@ -601,6 +683,21 @@ function CanvasInner({ schema, onBack }: EnvironmentCanvasProps) {
             <Download className="h-3 w-3" /> Export
           </Button>
 
+          <Button
+            variant="outline"
+            size="sm"
+            className={`gap-1.5 bg-transparent text-xs ${showChangesPanel ? "border-foreground/40 text-foreground" : ""}`}
+            onClick={() => setShowChangesPanel(!showChangesPanel)}
+          >
+            <GitCompare className="h-3 w-3" />
+            Changes
+            {changes.hasChanges && (
+              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500/20 px-1 text-[9px] font-semibold text-amber-400">
+                {changes.totalChanges}
+              </span>
+            )}
+          </Button>
+
           <Button variant="outline" size="sm" className="gap-1.5 bg-transparent text-xs">
             <Save className="h-3 w-3" /> Save
           </Button>
@@ -645,12 +742,43 @@ function CanvasInner({ schema, onBack }: EnvironmentCanvasProps) {
                 </TooltipContent>
               </Tooltip>
             ))}
+
+            <div className="my-1 h-px w-6 bg-border" />
+
+            {/* Changes Toggle */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setShowChangesPanel(!showChangesPanel)}
+                  className={`relative flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
+                    showChangesPanel
+                      ? "bg-accent text-foreground"
+                      : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                  }`}
+                >
+                  <GitCompare className="h-4 w-4" />
+                  {changes.hasChanges && (
+                    <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-amber-500 px-0.5 text-[8px] font-bold text-background">
+                      {changes.totalChanges > 9 ? "9+" : changes.totalChanges}
+                    </span>
+                  )}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent
+                side="right"
+                className="border-border bg-card text-foreground"
+              >
+                <span className="text-xs">
+                  Changes{changes.hasChanges ? ` (${changes.totalChanges})` : ""}
+                </span>
+              </TooltipContent>
+            </Tooltip>
           </div>
 
           {/* Canvas */}
           <div className="relative flex-1 overflow-hidden">
             <ReactFlow
-              nodes={nodes}
+              nodes={displayNodes}
               edges={edges}
               onNodesChange={onNodesChange}
               onEdgesChange={onEdgesChange}
@@ -861,16 +989,23 @@ function CanvasInner({ schema, onBack }: EnvironmentCanvasProps) {
           </div>
 
           {/* Right Properties Panel */}
-          {selectedNode && selectedSchema && (
+          {selectedNode && selectedSchema && !showChangesPanel && (
             <div className="flex w-72 flex-col border-l border-border bg-card/50">
               <div className="flex items-center justify-between border-b border-border px-4 py-3">
-                <div>
-                  <h3 className="text-xs font-semibold text-foreground">
-                    {selectedSchema.label}
-                  </h3>
-                  <p className="text-[10px] text-muted-foreground">
-                    {selectedSchema.category} node
-                  </p>
+                <div className="flex items-center gap-2">
+                  <div>
+                    <h3 className="text-xs font-semibold text-foreground">
+                      {selectedSchema.label}
+                    </h3>
+                    <p className="text-[10px] text-muted-foreground">
+                      {selectedSchema.category} node
+                    </p>
+                  </div>
+                  {modifiedNodeIds.has(selectedNode.id) && (
+                    <span className="flex h-4 items-center gap-1 rounded bg-amber-500/10 px-1.5 text-[9px] font-medium text-amber-400">
+                      Modified
+                    </span>
+                  )}
                 </div>
                 <button
                   onClick={() => setSelectedNode(null)}
@@ -896,49 +1031,69 @@ function CanvasInner({ schema, onBack }: EnvironmentCanvasProps) {
                     Fields
                   </p>
 
-                  {selectedSchema.inputs.map((input) => (
-                    <div key={input.id} className="flex flex-col gap-1.5">
-                      <Label className="flex items-center gap-1 text-xs text-foreground">
-                        {input.label}
-                        {input.required && (
-                          <span className="text-destructive">*</span>
+                  {selectedSchema.inputs.map((input) => {
+                    const isFieldModified = selectedModifiedFields.has(input.id)
+                    return (
+                      <div
+                        key={input.id}
+                        className={`flex flex-col gap-1.5 rounded-md px-2 py-1.5 -mx-2 transition-colors ${
+                          isFieldModified ? "bg-amber-500/5 ring-1 ring-amber-500/20" : ""
+                        }`}
+                      >
+                        <Label className="flex items-center gap-1 text-xs text-foreground">
+                          {input.label}
+                          {input.required && (
+                            <span className="text-destructive">*</span>
+                          )}
+                          {isFieldModified && (
+                            <span className="ml-1 h-1.5 w-1.5 rounded-full bg-amber-400" />
+                          )}
+                          <Badge
+                            variant="outline"
+                            className="ml-auto border-border px-1 text-[9px] text-muted-foreground"
+                          >
+                            {input.portType}
+                          </Badge>
+                        </Label>
+                        {input.portType === "number" ? (
+                          <Input
+                            type="number"
+                            value={Number(selectedValues[input.id] ?? 0)}
+                            onChange={(e) =>
+                              updateNodeValue(input.id, Number(e.target.value))
+                            }
+                            className={`h-8 text-xs ${isFieldModified ? "border-amber-500/30" : ""}`}
+                          />
+                        ) : input.portType === "script" ? (
+                          <Textarea
+                            value={String(selectedValues[input.id] ?? "")}
+                            onChange={(e) =>
+                              updateNodeValue(input.id, e.target.value)
+                            }
+                            className={`font-mono text-xs ${isFieldModified ? "border-amber-500/30" : ""}`}
+                            rows={3}
+                          />
+                        ) : (
+                          <Input
+                            value={String(selectedValues[input.id] ?? "")}
+                            onChange={(e) =>
+                              updateNodeValue(input.id, e.target.value)
+                            }
+                            className={`h-8 text-xs ${isFieldModified ? "border-amber-500/30" : ""}`}
+                          />
                         )}
-                        <Badge
-                          variant="outline"
-                          className="ml-auto border-border px-1 text-[9px] text-muted-foreground"
-                        >
-                          {input.portType}
-                        </Badge>
-                      </Label>
-                      {input.portType === "number" ? (
-                        <Input
-                          type="number"
-                          value={Number(selectedValues[input.id] ?? 0)}
-                          onChange={(e) =>
-                            updateNodeValue(input.id, Number(e.target.value))
-                          }
-                          className="h-8 text-xs"
-                        />
-                      ) : input.portType === "script" ? (
-                        <Textarea
-                          value={String(selectedValues[input.id] ?? "")}
-                          onChange={(e) =>
-                            updateNodeValue(input.id, e.target.value)
-                          }
-                          className="font-mono text-xs"
-                          rows={3}
-                        />
-                      ) : (
-                        <Input
-                          value={String(selectedValues[input.id] ?? "")}
-                          onChange={(e) =>
-                            updateNodeValue(input.id, e.target.value)
-                          }
-                          className="h-8 text-xs"
-                        />
-                      )}
-                    </div>
-                  ))}
+                        {isFieldModified && (
+                          <button
+                            onClick={() => handleRevertField(selectedNode.id, input.id)}
+                            className="flex items-center gap-1 self-end rounded px-1.5 py-0.5 text-[9px] text-amber-400 transition-colors hover:bg-amber-500/10"
+                          >
+                            <RotateCcw className="h-2.5 w-2.5" />
+                            Revert
+                          </button>
+                        )}
+                      </div>
+                    )
+                  })}
 
                   {selectedSchema.outputs.length > 0 && (
                     <>
@@ -964,6 +1119,18 @@ function CanvasInner({ schema, onBack }: EnvironmentCanvasProps) {
                 </div>
               </ScrollArea>
             </div>
+          )}
+
+          {/* Changes Panel */}
+          {showChangesPanel && (
+            <ChangesPanel
+              changes={changes}
+              onClose={() => setShowChangesPanel(false)}
+              onRevertField={handleRevertField}
+              onRevertAll={handleRevertAll}
+              onClearChanges={handleClearChanges}
+              onNavigateToNode={handleNavigateToChangedNode}
+            />
           )}
         </div>
       </div>
