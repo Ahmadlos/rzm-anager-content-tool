@@ -22,6 +22,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { EnvironmentCanvas } from "@/components/canvas/environment-canvas"
+import { ProfileSelector } from "@/components/database/profile-selector"
 import {
   type EnvironmentId,
   environmentSchemas,
@@ -223,6 +224,8 @@ export function EnvironmentShell({ envId, onBack }: EnvironmentShellProps) {
           <div className="flex-1" />
 
           <div className="flex items-center gap-2">
+            <ProfileSelector envId={envId} />
+            <div className="h-5 w-px bg-border" />
             <Button
               variant="outline"
               size="sm"

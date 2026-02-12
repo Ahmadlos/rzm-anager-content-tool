@@ -4,9 +4,10 @@ import { useState, useEffect } from "react"
 import { DashboardHub } from "@/components/dashboard/dashboard-hub"
 import { EnvironmentLoader } from "@/components/dashboard/environment-loader"
 import { EnvironmentShell } from "@/components/environments/environment-shell"
+import { ConnectionManager } from "@/components/database/connection-manager"
 import type { EnvironmentId } from "@/lib/environment-schemas"
 
-type AppView = "dashboard" | "loading" | EnvironmentId
+type AppView = "dashboard" | "loading" | "connection-manager" | EnvironmentId
 
 export default function App() {
   const [view, setView] = useState<AppView>("dashboard")
@@ -36,7 +37,16 @@ export default function App() {
   }
 
   if (view === "dashboard") {
-    return <DashboardHub onEnterEnvironment={handleEnterEnvironment} />
+    return (
+      <DashboardHub
+        onEnterEnvironment={handleEnterEnvironment}
+        onOpenConnectionManager={() => setView("connection-manager")}
+      />
+    )
+  }
+
+  if (view === "connection-manager") {
+    return <ConnectionManager onBack={handleBack} />
   }
 
   // All environment IDs use the unified EnvironmentShell

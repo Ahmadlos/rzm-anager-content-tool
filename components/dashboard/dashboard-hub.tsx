@@ -16,6 +16,7 @@ import {
   Settings,
   FolderOpen,
   Layers,
+  Database,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -142,9 +143,10 @@ const recentActivity = [
 
 interface DashboardHubProps {
   onEnterEnvironment: (envId: EnvironmentId) => void
+  onOpenConnectionManager?: () => void
 }
 
-export function DashboardHub({ onEnterEnvironment }: DashboardHubProps) {
+export function DashboardHub({ onEnterEnvironment, onOpenConnectionManager }: DashboardHubProps) {
   const [search, setSearch] = useState("")
   const [hoveredCard, setHoveredCard] = useState<string | null>(null)
 
@@ -181,6 +183,21 @@ export function DashboardHub({ onEnterEnvironment }: DashboardHubProps) {
                 className="h-8 pl-9 text-xs"
               />
             </div>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground"
+                  onClick={onOpenConnectionManager}
+                >
+                  <Database className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent className="border-border bg-card text-foreground">
+                <span className="text-xs">Connection Manager</span>
+              </TooltipContent>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -276,8 +293,29 @@ export function DashboardHub({ onEnterEnvironment }: DashboardHubProps) {
               ))}
             </div>
 
+            {/* Database Connection Quick Access */}
+            <div className="mt-8">
+              <button
+                onClick={onOpenConnectionManager}
+                className="group flex w-full items-center gap-4 rounded-xl border border-border bg-card p-4 text-left transition-all duration-200 hover:border-muted-foreground/30 hover:shadow-lg hover:shadow-background/80"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-foreground/5">
+                  <Database className="h-5 w-5 text-foreground/70" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Database Connections
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Manage server profiles, SSH tunnels, and database mappings
+                  </p>
+                </div>
+                <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+              </button>
+            </div>
+
             {/* Recent Activity Section */}
-            <div className="mt-10">
+            <div className="mt-8">
               <div className="mb-4 flex items-center gap-2">
                 <FolderOpen className="h-4 w-4 text-muted-foreground" />
                 <h3 className="text-sm font-semibold text-foreground">

@@ -76,6 +76,10 @@ import {
   loadGraph,
   saveGraph,
 } from "@/lib/graph-store"
+import {
+  getBinding,
+  getProfile,
+} from "@/lib/db-profiles"
 
 // ---- Constants ----
 
@@ -484,10 +488,24 @@ function CanvasInner({ schema, entity, onBack }: EnvironmentCanvasProps) {
 
   // Download JSON after pipeline completes
   const handleDownloadExport = useCallback(() => {
+    // Include connection profile metadata in export
+    const binding = getBinding(schema.id as import("@/lib/environment-schemas").EnvironmentId)
+    const profile = binding.profileId ? getProfile(binding.profileId) : null
+    const connectionInfo = profile
+      ? {
+          profileName: profile.name,
+          host: profile.sshEnabled ? `ssh://${profile.sshHost}:${profile.sshPort} -> ${profile.host}:${profile.port}` : `${profile.host}:${profile.port}`,
+          database: binding.overrideDatabase || (binding.database ? profile.databaseMap[binding.database] : profile.defaultDatabase),
+          encrypted: profile.encryptConnection,
+          sshEnabled: profile.sshEnabled,
+        }
+      : null
+
     const data = {
       environment: schema.id,
       projectName,
       exportedAt: new Date().toISOString(),
+      connection: connectionInfo,
       nodes: nodes.map((n) => ({
         id: n.id,
         type: (n.data as { schema?: NodeSchema }).schema?.type,
