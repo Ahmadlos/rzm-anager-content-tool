@@ -12,6 +12,7 @@ import type { EnvironmentId } from "@/lib/environment-schemas"
 export type AuthType = "windows" | "sql"
 export type SSHAuthMethod = "password" | "key"
 export type GameDatabase = "arcadia" | "auth" | "BILLING" | "Telecaster"
+export type ServerType = "development" | "test" | "production"
 
 // --- Profile shape ---
 
@@ -23,6 +24,7 @@ export interface ServerProfile {
   port: number
   defaultDatabase: string
   authType: AuthType
+  serverType: ServerType
   username: string
   password: string            // stored obfuscated
   encryptConnection: boolean
@@ -75,6 +77,7 @@ export function createDefaultProfile(partial?: Partial<ServerProfile>): ServerPr
     port: 1433,
     defaultDatabase: "arcadia",
     authType: "sql",
+    serverType: "development",
     username: "",
     password: "",
     encryptConnection: true,
@@ -235,7 +238,14 @@ export async function testConnection(profile: ServerProfile): Promise<Connection
   return {
     success: true,
     serverVersion: "Microsoft SQL Server 2019 (RTM-CU22) - 15.0.4322.2",
-    databases: ["master", "tempdb", "msdb", "arcadia", "auth", "BILLING", "Telecaster", "model"],
+    databases: [
+      "master", "tempdb", "msdb", "model",
+      // Multi-version Rappelz databases for auto-detection
+      "arcadia", "Arcadia_71", "Arcadia_74", "Arcadia_910",
+      "auth", "Auth_71", "Auth_74",
+      "BILLING", "Billing_v2",
+      "Telecaster", "Telecaster_71", "Telecaster_74", "Telecaster_910",
+    ],
     sshStatus: profile.sshEnabled ? "connected" : "skipped",
   }
 }

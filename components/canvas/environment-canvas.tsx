@@ -76,10 +76,8 @@ import {
   loadGraph,
   saveGraph,
 } from "@/lib/graph-store"
-import {
-  getBinding,
-  getProfile,
-} from "@/lib/db-profiles"
+import { getProfile } from "@/lib/db-profiles"
+import { getActiveWorkspace } from "@/lib/workspace-store"
 
 // ---- Constants ----
 
@@ -488,16 +486,20 @@ function CanvasInner({ schema, entity, onBack }: EnvironmentCanvasProps) {
 
   // Download JSON after pipeline completes
   const handleDownloadExport = useCallback(() => {
-    // Include connection profile metadata in export
-    const binding = getBinding(schema.id as import("@/lib/environment-schemas").EnvironmentId)
-    const profile = binding.profileId ? getProfile(binding.profileId) : null
-    const connectionInfo = profile
+    // Include workspace + connection metadata in export
+    const workspace = getActiveWorkspace()
+    const profile = workspace ? getProfile(workspace.profileId) : null
+    const connectionInfo = workspace && profile
       ? {
+          workspaceName: workspace.name,
           profileName: profile.name,
+          serverType: profile.serverType,
           host: profile.sshEnabled ? `ssh://${profile.sshHost}:${profile.sshPort} -> ${profile.host}:${profile.port}` : `${profile.host}:${profile.port}`,
-          database: binding.overrideDatabase || (binding.database ? profile.databaseMap[binding.database] : profile.defaultDatabase),
+          databases: workspace.databases,
+          schemaFingerprint: workspace.schemaFingerprint?.hash ?? null,
           encrypted: profile.encryptConnection,
           sshEnabled: profile.sshEnabled,
+          versionLocked: workspace.versionLockEnabled,
         }
       : null
 
@@ -505,7 +507,7 @@ function CanvasInner({ schema, entity, onBack }: EnvironmentCanvasProps) {
       environment: schema.id,
       projectName,
       exportedAt: new Date().toISOString(),
-      connection: connectionInfo,
+      workspace: connectionInfo,
       nodes: nodes.map((n) => ({
         id: n.id,
         type: (n.data as { schema?: NodeSchema }).schema?.type,

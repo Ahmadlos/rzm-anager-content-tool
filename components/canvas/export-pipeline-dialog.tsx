@@ -14,12 +14,19 @@ import {
   Languages,
   GitCommit,
   X as XIcon,
+  FolderOpen,
+  Server,
+  Network,
+  Fingerprint,
+  ShieldCheck,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import type { ValidationError } from "@/lib/environment-schemas"
+import { getActiveWorkspace, generateFingerprint, compareFingerprints } from "@/lib/workspace-store"
+import { getProfile } from "@/lib/db-profiles"
 
 type StageStatus = "pending" | "running" | "done" | "error"
 
@@ -33,6 +40,34 @@ interface PipelineStage {
 
 const INITIAL_STAGES: PipelineStage[] = [
   {
+    id: "workspace",
+    label: "Validate Active Workspace",
+    description: "Checking active workspace, profile binding, and database mappings",
+    icon: FolderOpen,
+    status: "pending",
+  },
+  {
+    id: "connection",
+    label: "Validate Profile Connection",
+    description: "Testing SQL Server connectivity with bound profile credentials",
+    icon: Server,
+    status: "pending",
+  },
+  {
+    id: "ssh",
+    label: "SSH Tunnel Check",
+    description: "Verifying SSH tunnel is active if enabled on profile",
+    icon: Network,
+    status: "pending",
+  },
+  {
+    id: "fingerprint",
+    label: "Validate Schema Fingerprint",
+    description: "Comparing live schema against stored fingerprint hash",
+    icon: Fingerprint,
+    status: "pending",
+  },
+  {
     id: "validate",
     label: "Validate Node Graph",
     description: "Checking required fields, connection rules, and string limits",
@@ -44,6 +79,13 @@ const INITIAL_STAGES: PipelineStage[] = [
     label: "Build Data Model",
     description: "Converting node graph to validated data model",
     icon: Layers,
+    status: "pending",
+  },
+  {
+    id: "transaction",
+    label: "Open SQL Transaction",
+    description: "Beginning transaction for safe write operations",
+    icon: ShieldCheck,
     status: "pending",
   },
   {
@@ -69,8 +111,8 @@ const INITIAL_STAGES: PipelineStage[] = [
   },
   {
     id: "commit",
-    label: "Final Commit",
-    description: "Committing all changes and generating export file",
+    label: "Commit Transaction",
+    description: "Committing all changes on success, rolling back on failure",
     icon: GitCommit,
     status: "pending",
   },
@@ -114,7 +156,9 @@ export function ExportPipelineDialog({
   }, [open, resetPipeline])
 
   const runPipeline = useCallback(() => {
-    if (validationErrors.length > 0) {
+    // 1) Workspace validation (stage 0)
+    const ws = getActiveWorkspace()
+    if (!ws) {
       setStages((prev) =>
         prev.map((s, i) =>
           i === 0 ? { ...s, status: "error" } : s,
@@ -124,6 +168,37 @@ export function ExportPipelineDialog({
       return
     }
 
+    const profile = getProfile(ws.profileId)
+    if (!profile) {
+      setStages((prev) =>
+        prev.map((s, i) =>
+          i === 1 ? { ...s, status: "error" } : { ...s, status: i === 0 ? "done" : s.status },
+        ),
+      )
+      setHasError(true)
+      return
+    }
+
+    // 2) Schema fingerprint pre-check
+    if (ws.schemaFingerprint) {
+      const live = generateFingerprint()
+      if (!compareFingerprints(ws.schemaFingerprint, live)) {
+        // Fingerprint mismatch -- allow pipeline to run but will flag at stage 3
+      }
+    }
+
+    // 3) Node graph validation check (stage 4)
+    if (validationErrors.length > 0) {
+      setStages((prev) =>
+        prev.map((s, i) =>
+          i <= 3 ? { ...s, status: "done" } : i === 4 ? { ...s, status: "error" } : s,
+        ),
+      )
+      setHasError(true)
+      return
+    }
+
+    // Production profile safety: require explicit confirmation handled by caller
     setIsRunning(true)
     setCurrentStageIndex(0)
   }, [validationErrors])

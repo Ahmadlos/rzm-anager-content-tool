@@ -28,6 +28,8 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import type { EnvironmentId } from "@/lib/environment-schemas"
+import { WorkspaceStatusBar } from "@/components/workspace/workspace-status-bar"
+import { getActiveWorkspace } from "@/lib/workspace-store"
 
 interface EnvironmentCard {
   id: EnvironmentId
@@ -144,11 +146,13 @@ const recentActivity = [
 interface DashboardHubProps {
   onEnterEnvironment: (envId: EnvironmentId) => void
   onOpenConnectionManager?: () => void
+  onOpenWorkspaceManager?: () => void
 }
 
-export function DashboardHub({ onEnterEnvironment, onOpenConnectionManager }: DashboardHubProps) {
+export function DashboardHub({ onEnterEnvironment, onOpenConnectionManager, onOpenWorkspaceManager }: DashboardHubProps) {
   const [search, setSearch] = useState("")
   const [hoveredCard, setHoveredCard] = useState<string | null>(null)
+  const activeWorkspace = getActiveWorkspace()
 
   const filteredEnvs = environments.filter(
     (e) =>
@@ -174,7 +178,8 @@ export function DashboardHub({ onEnterEnvironment, onOpenConnectionManager }: Da
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="relative w-64">
+            <WorkspaceStatusBar onOpenWorkspaceManager={onOpenWorkspaceManager} />
+            <div className="relative w-56">
               <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search environments..."
@@ -196,6 +201,21 @@ export function DashboardHub({ onEnterEnvironment, onOpenConnectionManager }: Da
               </TooltipTrigger>
               <TooltipContent className="border-border bg-card text-foreground">
                 <span className="text-xs">Connection Manager</span>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground"
+                  onClick={onOpenWorkspaceManager}
+                >
+                  <FolderOpen className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent className="border-border bg-card text-foreground">
+                <span className="text-xs">Workspace Manager</span>
               </TooltipContent>
             </Tooltip>
             <Tooltip>
@@ -293,11 +313,30 @@ export function DashboardHub({ onEnterEnvironment, onOpenConnectionManager }: Da
               ))}
             </div>
 
-            {/* Database Connection Quick Access */}
-            <div className="mt-8">
+            {/* Workspace + Connection Quick Access */}
+            <div className="mt-8 grid grid-cols-1 gap-3 md:grid-cols-2">
+              <button
+                onClick={onOpenWorkspaceManager}
+                className="group flex items-center gap-4 rounded-xl border border-border bg-card p-4 text-left transition-all duration-200 hover:border-muted-foreground/30 hover:shadow-lg hover:shadow-background/80"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-foreground/5">
+                  <FolderOpen className="h-5 w-5 text-foreground/70" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Workspaces
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    {activeWorkspace
+                      ? `Active: ${activeWorkspace.name}`
+                      : "No active workspace -- create one to start"}
+                  </p>
+                </div>
+                <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+              </button>
               <button
                 onClick={onOpenConnectionManager}
-                className="group flex w-full items-center gap-4 rounded-xl border border-border bg-card p-4 text-left transition-all duration-200 hover:border-muted-foreground/30 hover:shadow-lg hover:shadow-background/80"
+                className="group flex items-center gap-4 rounded-xl border border-border bg-card p-4 text-left transition-all duration-200 hover:border-muted-foreground/30 hover:shadow-lg hover:shadow-background/80"
               >
                 <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-foreground/5">
                   <Database className="h-5 w-5 text-foreground/70" />
@@ -307,7 +346,7 @@ export function DashboardHub({ onEnterEnvironment, onOpenConnectionManager }: Da
                     Database Connections
                   </h3>
                   <p className="text-xs text-muted-foreground">
-                    Manage server profiles, SSH tunnels, and database mappings
+                    Manage server profiles, SSH tunnels, and credentials
                   </p>
                 </div>
                 <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />

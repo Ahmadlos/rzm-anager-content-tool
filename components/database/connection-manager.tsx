@@ -46,6 +46,7 @@ import {
   type ServerProfile,
   type AuthType,
   type SSHAuthMethod,
+  type ServerType,
   type GameDatabase,
   type ConnectionTestResult,
   GAME_DBS,
@@ -515,6 +516,30 @@ export function ConnectionManager({ onBack }: ConnectionManagerProps) {
                       <Separator />
 
                       <div className="flex flex-col gap-4">
+                        <Field label="Server Type" hint="Production servers enforce safe mode and export confirmation.">
+                          <Select
+                            value={draft.serverType}
+                            onValueChange={(v) => updateDraft("serverType", v as ServerType)}
+                          >
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="development" className="text-xs">
+                                Development
+                              </SelectItem>
+                              <SelectItem value="test" className="text-xs">
+                                Test
+                              </SelectItem>
+                              <SelectItem value="production" className="text-xs">
+                                Production
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </Field>
+
+                        <Separator />
+
                         <Field label="Authentication Type">
                           <Select
                             value={draft.authType}

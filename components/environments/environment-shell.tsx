@@ -22,7 +22,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { EnvironmentCanvas } from "@/components/canvas/environment-canvas"
-import { ProfileSelector } from "@/components/database/profile-selector"
+import { WorkspaceStatusBar } from "@/components/workspace/workspace-status-bar"
 import {
   type EnvironmentId,
   environmentSchemas,
@@ -151,11 +151,12 @@ function ManagerContent({
 interface EnvironmentShellProps {
   envId: EnvironmentId
   onBack: () => void
+  onOpenWorkspaceManager?: () => void
 }
 
 type SubView = "manager" | "canvas" | "loading"
 
-export function EnvironmentShell({ envId, onBack }: EnvironmentShellProps) {
+export function EnvironmentShell({ envId, onBack, onOpenWorkspaceManager }: EnvironmentShellProps) {
   const [subView, setSubView] = useState<SubView>("manager")
   const [selectedEntity, setSelectedEntity] = useState<SelectedEntity | null>(null)
   const schema = environmentSchemas[envId]
@@ -224,7 +225,7 @@ export function EnvironmentShell({ envId, onBack }: EnvironmentShellProps) {
           <div className="flex-1" />
 
           <div className="flex items-center gap-2">
-            <ProfileSelector envId={envId} />
+            <WorkspaceStatusBar onOpenWorkspaceManager={onOpenWorkspaceManager} />
             <div className="h-5 w-px bg-border" />
             <Button
               variant="outline"
