@@ -12,6 +12,7 @@ import {
   Zap,
   Shield,
   Plus,
+  GitCommit,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
@@ -152,11 +153,12 @@ interface EnvironmentShellProps {
   envId: EnvironmentId
   onBack: () => void
   onOpenWorkspaceManager?: () => void
+  onOpenStaging?: () => void
 }
 
 type SubView = "manager" | "canvas" | "loading"
 
-export function EnvironmentShell({ envId, onBack, onOpenWorkspaceManager }: EnvironmentShellProps) {
+export function EnvironmentShell({ envId, onBack, onOpenWorkspaceManager, onOpenStaging }: EnvironmentShellProps) {
   const [subView, setSubView] = useState<SubView>("manager")
   const [selectedEntity, setSelectedEntity] = useState<SelectedEntity | null>(null)
   const schema = environmentSchemas[envId]
@@ -227,6 +229,15 @@ export function EnvironmentShell({ envId, onBack, onOpenWorkspaceManager }: Envi
           <div className="flex items-center gap-2">
             <WorkspaceStatusBar onOpenWorkspaceManager={onOpenWorkspaceManager} />
             <div className="h-5 w-px bg-border" />
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 bg-transparent text-xs"
+              onClick={onOpenStaging}
+            >
+              <GitCommit className="h-3 w-3" />
+              Commit
+            </Button>
             <Button
               variant="outline"
               size="sm"

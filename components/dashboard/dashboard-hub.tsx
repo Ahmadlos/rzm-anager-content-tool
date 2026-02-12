@@ -17,6 +17,7 @@ import {
   FolderOpen,
   Layers,
   Database,
+  GitCommit,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -147,9 +148,10 @@ interface DashboardHubProps {
   onEnterEnvironment: (envId: EnvironmentId) => void
   onOpenConnectionManager?: () => void
   onOpenWorkspaceManager?: () => void
+  onOpenStaging?: () => void
 }
 
-export function DashboardHub({ onEnterEnvironment, onOpenConnectionManager, onOpenWorkspaceManager }: DashboardHubProps) {
+export function DashboardHub({ onEnterEnvironment, onOpenConnectionManager, onOpenWorkspaceManager, onOpenStaging }: DashboardHubProps) {
   const [search, setSearch] = useState("")
   const [hoveredCard, setHoveredCard] = useState<string | null>(null)
   const activeWorkspace = getActiveWorkspace()
@@ -216,6 +218,21 @@ export function DashboardHub({ onEnterEnvironment, onOpenConnectionManager, onOp
               </TooltipTrigger>
               <TooltipContent className="border-border bg-card text-foreground">
                 <span className="text-xs">Workspace Manager</span>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 text-muted-foreground"
+                  onClick={onOpenStaging}
+                >
+                  <GitCommit className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent className="border-border bg-card text-foreground">
+                <span className="text-xs">Commit & Deploy</span>
               </TooltipContent>
             </Tooltip>
             <Tooltip>
@@ -313,8 +330,8 @@ export function DashboardHub({ onEnterEnvironment, onOpenConnectionManager, onOp
               ))}
             </div>
 
-            {/* Workspace + Connection Quick Access */}
-            <div className="mt-8 grid grid-cols-1 gap-3 md:grid-cols-2">
+            {/* Workspace + Connection + Staging Quick Access */}
+            <div className="mt-8 grid grid-cols-1 gap-3 md:grid-cols-3">
               <button
                 onClick={onOpenWorkspaceManager}
                 className="group flex items-center gap-4 rounded-xl border border-border bg-card p-4 text-left transition-all duration-200 hover:border-muted-foreground/30 hover:shadow-lg hover:shadow-background/80"
@@ -347,6 +364,23 @@ export function DashboardHub({ onEnterEnvironment, onOpenConnectionManager, onOp
                   </h3>
                   <p className="text-xs text-muted-foreground">
                     Manage server profiles, SSH tunnels, and credentials
+                  </p>
+                </div>
+                <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+              </button>
+              <button
+                onClick={onOpenStaging}
+                className="group flex items-center gap-4 rounded-xl border border-border bg-card p-4 text-left transition-all duration-200 hover:border-muted-foreground/30 hover:shadow-lg hover:shadow-background/80"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-border bg-foreground/5">
+                  <GitCommit className="h-5 w-5 text-foreground/70" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-sm font-semibold text-foreground">
+                    Commit & Deploy
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Stage changes, commit, preview SQL, and apply to database
                   </p>
                 </div>
                 <ArrowRight className="h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" />

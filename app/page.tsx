@@ -6,9 +6,10 @@ import { EnvironmentLoader } from "@/components/dashboard/environment-loader"
 import { EnvironmentShell } from "@/components/environments/environment-shell"
 import { ConnectionManager } from "@/components/database/connection-manager"
 import { WorkspaceManager } from "@/components/workspace/workspace-manager"
+import { StagingView } from "@/components/staging/staging-view"
 import type { EnvironmentId } from "@/lib/environment-schemas"
 
-type AppView = "dashboard" | "loading" | "connection-manager" | "workspace-manager" | EnvironmentId
+type AppView = "dashboard" | "loading" | "connection-manager" | "workspace-manager" | "staging" | EnvironmentId
 
 export default function App() {
   const [view, setView] = useState<AppView>("dashboard")
@@ -43,6 +44,7 @@ export default function App() {
         onEnterEnvironment={handleEnterEnvironment}
         onOpenConnectionManager={() => setView("connection-manager")}
         onOpenWorkspaceManager={() => setView("workspace-manager")}
+        onOpenStaging={() => setView("staging")}
       />
     )
   }
@@ -60,12 +62,22 @@ export default function App() {
     )
   }
 
+  if (view === "staging") {
+    return (
+      <StagingView
+        onBack={handleBack}
+        onOpenWorkspaceManager={() => setView("workspace-manager")}
+      />
+    )
+  }
+
   // All environment IDs use the unified EnvironmentShell
   return (
     <EnvironmentShell
       envId={view as EnvironmentId}
       onBack={handleBack}
       onOpenWorkspaceManager={() => setView("workspace-manager")}
+      onOpenStaging={() => setView("staging")}
     />
   )
 }
