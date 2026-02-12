@@ -101,6 +101,31 @@ export function createDefaultProfile(partial?: Partial<ServerProfile>): ServerPr
   }
 }
 
+// --- Obfuscation helpers (XOR with a fixed key) ---
+// NOTE: Must be declared before the seed profile that calls obfuscate().
+
+const OBF_KEY = "RZ_MANAGER_2024"
+
+export function obfuscate(plain: string): string {
+  if (!plain) return ""
+  const bytes = Array.from(plain).map((c, i) =>
+    // biome-ignore lint: XOR obfuscation
+    (c.charCodeAt(0) ^ OBF_KEY.charCodeAt(i % OBF_KEY.length)).toString(16).padStart(4, "0"),
+  )
+  return bytes.join("")
+}
+
+export function deobfuscate(hex: string): string {
+  if (!hex) return ""
+  const chars: string[] = []
+  for (let i = 0; i < hex.length; i += 4) {
+    const code = Number.parseInt(hex.slice(i, i + 4), 16)
+    // biome-ignore lint: XOR deobfuscation
+    chars.push(String.fromCharCode(code ^ OBF_KEY.charCodeAt((i / 4) % OBF_KEY.length)))
+  }
+  return chars.join("")
+}
+
 // ============================================================
 // In-memory stores (singleton maps)
 // ============================================================
@@ -154,30 +179,6 @@ export function getBinding(envId: EnvironmentId): EnvironmentBinding {
 
 export function setBinding(envId: EnvironmentId, binding: EnvironmentBinding): void {
   bindingStore.set(envId, { ...binding })
-}
-
-// --- Obfuscation helpers (XOR with a fixed key) ---
-
-const OBF_KEY = "RZ_MANAGER_2024"
-
-export function obfuscate(plain: string): string {
-  if (!plain) return ""
-  const bytes = Array.from(plain).map((c, i) =>
-    // biome-ignore lint: XOR obfuscation
-    (c.charCodeAt(0) ^ OBF_KEY.charCodeAt(i % OBF_KEY.length)).toString(16).padStart(4, "0"),
-  )
-  return bytes.join("")
-}
-
-export function deobfuscate(hex: string): string {
-  if (!hex) return ""
-  const chars: string[] = []
-  for (let i = 0; i < hex.length; i += 4) {
-    const code = Number.parseInt(hex.slice(i, i + 4), 16)
-    // biome-ignore lint: XOR deobfuscation
-    chars.push(String.fromCharCode(code ^ OBF_KEY.charCodeAt((i / 4) % OBF_KEY.length)))
-  }
-  return chars.join("")
 }
 
 // --- Simulated connection test ---
