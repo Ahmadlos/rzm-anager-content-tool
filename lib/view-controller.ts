@@ -9,6 +9,7 @@ export type NavigationViewId =
   | "commit-deploy"
   | "explorer"
   | "compare"
+  | "rdb-export"
   | "settings"
 
 /** Full application view — either a navigation view or an environment */
@@ -21,6 +22,7 @@ export const actionBarViews = [
   "commit-deploy",
   "explorer",
   "compare",
+  "rdb-export",
   "settings",
 ] as const
 

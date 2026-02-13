@@ -22,6 +22,7 @@ import {
   TableProperties,
   GitCompare,
   LayoutGrid,
+  FileOutput,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -251,6 +252,10 @@ export function DashboardHub({ onEnterEnvironment, onNavigate, activeView }: Das
                 <DropdownMenuItem className="gap-2 text-xs" onClick={() => onNavigate("compare")}>
                   <GitCompare className="h-3.5 w-3.5 text-muted-foreground" />
                   DB Comparison
+                </DropdownMenuItem>
+                <DropdownMenuItem className="gap-2 text-xs" onClick={() => onNavigate("rdb-export")}>
+                  <FileOutput className="h-3.5 w-3.5 text-muted-foreground" />
+                  RDB Export Tool
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

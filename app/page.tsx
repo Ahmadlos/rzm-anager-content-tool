@@ -9,6 +9,7 @@ import { DatabaseConnectionsView } from "@/components/views/database-connections
 import { CommitDeployView } from "@/components/views/commit-deploy-view"
 import { ExplorerView } from "@/components/views/explorer-view"
 import { CompareView } from "@/components/views/compare-view"
+import { RdbExportView } from "@/components/views/rdb-export-view"
 import { SettingsView } from "@/components/views/settings-view"
 import type { AppView } from "@/lib/view-controller"
 import type { EnvironmentId } from "@/lib/environment-schemas"
@@ -66,6 +67,8 @@ export default function App() {
       return <ExplorerView onBack={handleBack} />
     case "compare":
       return <CompareView onBack={handleBack} />
+    case "rdb-export":
+      return <RdbExportView onBack={handleBack} />
     case "settings":
       return <SettingsView onBack={handleBack} />
   }
