@@ -1,29 +1,12 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
 import { DashboardHub } from "@/components/dashboard/dashboard-hub"
 import { EnvironmentLoader } from "@/components/dashboard/environment-loader"
 import { EnvironmentShell } from "@/components/environments/environment-shell"
-import { WorkspacesView } from "@/components/modules/workspaces-view"
-import { DatabaseConnectionsView } from "@/components/modules/database-connections-view"
-import { CommitDeployView } from "@/components/modules/commit-deploy-view"
-import { DatabaseExplorerView } from "@/components/modules/database-explorer-view"
-import { DBComparisonView } from "@/components/modules/db-comparison-view"
-import { SettingsView } from "@/components/modules/settings-view"
-import { TopActionBar } from "@/components/top-action-bar"
 import type { EnvironmentId } from "@/lib/environment-schemas"
 
-// Centralized ViewController enum
-export type ModuleView =
-  | "dashboard"
-  | "workspaces"
-  | "database-connections"
-  | "commit-deploy"
-  | "explorer"
-  | "compare"
-  | "settings"
-
-type AppView = ModuleView | "loading" | EnvironmentId
+type AppView = "dashboard" | "loading" | EnvironmentId
 
 export default function App() {
   const [view, setView] = useState<AppView>("dashboard")
@@ -48,56 +31,14 @@ export default function App() {
     setView("dashboard")
   }
 
-  const handleNavigate = useCallback((target: ModuleView) => {
-    setView(target)
-  }, [])
-
-  // Determine which module views show the shared top action bar
-  const moduleViews: ModuleView[] = [
-    "dashboard",
-    "workspaces",
-    "database-connections",
-    "commit-deploy",
-    "explorer",
-    "compare",
-    "settings",
-  ]
-
-  const isModuleView = moduleViews.includes(view as ModuleView)
-
   if (view === "loading" && loadingTarget) {
     return <EnvironmentLoader envId={loadingTarget} />
   }
 
-  // Environment shells handle their own header
-  if (!isModuleView) {
-    return (
-      <EnvironmentShell
-        envId={view as EnvironmentId}
-        onBack={handleBack}
-        onNavigate={handleNavigate}
-      />
-    )
+  if (view === "dashboard") {
+    return <DashboardHub onEnterEnvironment={handleEnterEnvironment} />
   }
 
-  // Module views share a common top action bar
-  return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <TopActionBar
-        activeView={view as ModuleView}
-        onNavigate={handleNavigate}
-      />
-      <main className="flex-1 overflow-auto">
-        {view === "dashboard" && (
-          <DashboardHub onEnterEnvironment={handleEnterEnvironment} />
-        )}
-        {view === "workspaces" && <WorkspacesView />}
-        {view === "database-connections" && <DatabaseConnectionsView />}
-        {view === "commit-deploy" && <CommitDeployView />}
-        {view === "explorer" && <DatabaseExplorerView />}
-        {view === "compare" && <DBComparisonView />}
-        {view === "settings" && <SettingsView />}
-      </main>
-    </div>
-  )
+  // All environment IDs use the unified EnvironmentShell
+  return <EnvironmentShell envId={view as EnvironmentId} onBack={handleBack} />
 }

@@ -10,13 +10,36 @@ import {
   Zap,
   Shield,
   ArrowRight,
+  Gamepad2,
   Search,
   Clock,
+  Settings,
   FolderOpen,
   Layers,
+  Database,
+  GitBranch,
+  Wrench,
+  TableProperties,
+  GitCompare,
+  LayoutGrid,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import type { EnvironmentId } from "@/lib/environment-schemas"
 
 interface EnvironmentCard {
