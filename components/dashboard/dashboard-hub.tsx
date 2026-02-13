@@ -41,6 +41,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import type { EnvironmentId } from "@/lib/environment-schemas"
+import type { AppView } from "@/lib/view-controller"
 
 interface EnvironmentCard {
   id: EnvironmentId
@@ -156,9 +157,11 @@ const recentActivity = [
 
 interface DashboardHubProps {
   onEnterEnvironment: (envId: EnvironmentId) => void
+  onNavigate: (view: AppView) => void
+  activeView: AppView
 }
 
-export function DashboardHub({ onEnterEnvironment }: DashboardHubProps) {
+export function DashboardHub({ onEnterEnvironment, onNavigate, activeView }: DashboardHubProps) {
   const [search, setSearch] = useState("")
   const [hoveredCard, setHoveredCard] = useState<string | null>(null)
 
@@ -198,17 +201,32 @@ export function DashboardHub({ onEnterEnvironment }: DashboardHubProps) {
 
             <div className="mx-1 h-5 w-px bg-border" />
 
-            <Button variant="outline" size="sm" className="gap-1.5 bg-transparent text-xs">
+            <Button
+              variant="outline"
+              size="sm"
+              className={`gap-1.5 text-xs ${activeView === "workspaces" ? "bg-foreground/10 text-foreground" : "bg-transparent"}`}
+              onClick={() => onNavigate("workspaces")}
+            >
               <LayoutGrid className="h-3 w-3" />
               Workspaces
             </Button>
 
-            <Button variant="outline" size="sm" className="gap-1.5 bg-transparent text-xs">
+            <Button
+              variant="outline"
+              size="sm"
+              className={`gap-1.5 text-xs ${activeView === "database-connections" ? "bg-foreground/10 text-foreground" : "bg-transparent"}`}
+              onClick={() => onNavigate("database-connections")}
+            >
               <Database className="h-3 w-3" />
               Database Connections
             </Button>
 
-            <Button variant="outline" size="sm" className="gap-1.5 bg-transparent text-xs">
+            <Button
+              variant="outline"
+              size="sm"
+              className={`gap-1.5 text-xs ${activeView === "commit-deploy" ? "bg-foreground/10 text-foreground" : "bg-transparent"}`}
+              onClick={() => onNavigate("commit-deploy")}
+            >
               <GitBranch className="h-3 w-3" />
               {"Commit & Deploy"}
             </Button>
@@ -226,11 +244,11 @@ export function DashboardHub({ onEnterEnvironment }: DashboardHubProps) {
                   Developer Tools
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem className="gap-2 text-xs">
+                <DropdownMenuItem className="gap-2 text-xs" onClick={() => onNavigate("explorer")}>
                   <TableProperties className="h-3.5 w-3.5 text-muted-foreground" />
                   Database Explorer
                 </DropdownMenuItem>
-                <DropdownMenuItem className="gap-2 text-xs">
+                <DropdownMenuItem className="gap-2 text-xs" onClick={() => onNavigate("compare")}>
                   <GitCompare className="h-3.5 w-3.5 text-muted-foreground" />
                   DB Comparison
                 </DropdownMenuItem>
@@ -244,7 +262,8 @@ export function DashboardHub({ onEnterEnvironment }: DashboardHubProps) {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-muted-foreground"
+                  className={`h-8 w-8 ${activeView === "settings" ? "text-foreground" : "text-muted-foreground"}`}
+                  onClick={() => onNavigate("settings")}
                 >
                   <Settings className="h-4 w-4" />
                 </Button>
