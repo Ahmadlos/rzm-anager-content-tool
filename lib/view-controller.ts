@@ -10,6 +10,7 @@ export type NavigationViewId =
   | "explorer"
   | "compare"
   | "rdb-export"
+  | "smart-apply"
   | "settings"
 
 /** Full application view — either a navigation view or an environment */
@@ -23,6 +24,7 @@ export const actionBarViews = [
   "explorer",
   "compare",
   "rdb-export",
+  "smart-apply",
   "settings",
 ] as const
 

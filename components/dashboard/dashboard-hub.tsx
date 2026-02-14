@@ -23,6 +23,7 @@ import {
   GitCompare,
   LayoutGrid,
   FileOutput,
+  GitMerge,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -256,6 +257,14 @@ export function DashboardHub({ onEnterEnvironment, onNavigate, activeView }: Das
                 <DropdownMenuItem className="gap-2 text-xs" onClick={() => onNavigate("rdb-export")}>
                   <FileOutput className="h-3.5 w-3.5 text-muted-foreground" />
                   RDB Export Tool
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuLabel className="text-xs text-muted-foreground">
+                  Deployment
+                </DropdownMenuLabel>
+                <DropdownMenuItem className="gap-2 text-xs" onClick={() => onNavigate("smart-apply")}>
+                  <GitMerge className="h-3.5 w-3.5 text-emerald-400" />
+                  Smart Apply
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
