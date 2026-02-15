@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useRef, useEffect } from "react"
+import { useState, useCallback, useMemo } from "react"
 import {
   ArrowLeft,
   Play,
@@ -25,10 +25,16 @@ import {
   Server,
   Download,
   RotateCcw,
+  Pencil,
+  Sparkles,
+  Ban,
+  RefreshCw,
+  ArrowRight,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Input } from "@/components/ui/input"
 import {
   Tooltip,
   TooltipContent,
@@ -44,11 +50,18 @@ import type {
   SqlStatement,
   IdMapping,
   ExecutionCategory,
+  ConflictRecord,
+  ConflictResolution,
+  ConflictReport,
+  FieldDiff,
 } from "@/lib/services/merge-engine"
 import {
   createMockProject,
   createMockExistingIds,
   createMockMaxIds,
+  createMockExistingDbRecords,
+  detectConflicts,
+  generateSafeId,
   runApplyPipeline,
   wrapInTransaction,
 } from "@/lib/services/merge-engine"
@@ -57,10 +70,11 @@ import {
 // TYPES & CONSTANTS
 // =============================================
 
-type ViewTab = "overview" | "dependencies" | "id-resolution" | "sql-preview" | "execution"
+type ViewTab = "overview" | "conflicts" | "dependencies" | "id-resolution" | "sql-preview" | "execution"
 
 const TABS: { id: ViewTab; label: string; icon: typeof Database }[] = [
   { id: "overview", label: "Overview", icon: GitMerge },
+  { id: "conflicts", label: "Conflicts", icon: AlertTriangle },
   { id: "dependencies", label: "Dependencies", icon: Link2 },
   { id: "id-resolution", label: "ID Resolution", icon: Hash },
   { id: "sql-preview", label: "SQL Preview", icon: FileCode2 },
@@ -70,6 +84,7 @@ const TABS: { id: ViewTab; label: string; icon: typeof Database }[] = [
 const STAGE_ORDER: PipelineStage[] = [
   "validating",
   "analyzing_dependencies",
+  "detecting_conflicts",
   "resolving_ids",
   "generating_sql",
   "preview",
@@ -79,6 +94,7 @@ const STAGE_LABELS: Record<string, string> = {
   idle: "Idle",
   validating: "Validate Structure",
   analyzing_dependencies: "Analyze Dependencies",
+  detecting_conflicts: "Detect Conflicts",
   resolving_ids: "Resolve IDs",
   generating_sql: "Generate SQL",
   preview: "Preview Ready",
@@ -139,10 +155,19 @@ export function SmartApplyView({ onBack }: SmartApplyViewProps) {
   const [copied, setCopied] = useState(false)
   const [expandedStatements, setExpandedStatements] = useState<Set<number>>(new Set())
   const [executionSimulated, setExecutionSimulated] = useState(false)
-  const scrollRef = useRef<HTMLDivElement>(null)
 
-  const project = createMockProject()
-  const entity = project.entities
+  // Conflict resolution state
+  const [conflictReport, setConflictReport] = useState<ConflictReport | null>(null)
+  const [expandedConflict, setExpandedConflict] = useState<string | null>(null)
+
+  const project = useMemo(() => createMockProject(), [])
+  const existingIds = useMemo(() => createMockExistingIds(), [])
+  const maxIds = useMemo(() => createMockMaxIds(), [])
+  const existingDbRecords = useMemo(() => createMockExistingDbRecords(), [])
+
+  const unresolvedCount = conflictReport
+    ? conflictReport.totalConflicts - conflictReport.resolvedCount
+    : 0
 
   // Run the pipeline
   const handleRunPipeline = useCallback(async () => {
@@ -151,14 +176,46 @@ export function SmartApplyView({ onBack }: SmartApplyViewProps) {
     setExecutionSimulated(false)
     setActiveTab("overview")
 
-    const existingIds = createMockExistingIds()
-    const maxIds = createMockMaxIds()
+    const pipelineResult = await runApplyPipeline(
+      project,
+      existingIds,
+      maxIds,
+      existingDbRecords,
+      (p) => setProgress(p),
+      conflictReport ?? undefined
+    )
+
+    setResult(pipelineResult)
+    setIsRunning(false)
+
+    // If conflicts were detected and need resolution
+    if (
+      pipelineResult.conflictReport.totalConflicts > 0 &&
+      !pipelineResult.conflictReport.allResolved
+    ) {
+      setConflictReport(pipelineResult.conflictReport)
+      setActiveTab("conflicts")
+    } else if (pipelineResult.success) {
+      setConflictReport(pipelineResult.conflictReport)
+      setActiveTab("sql-preview")
+    }
+  }, [project, existingIds, maxIds, existingDbRecords, conflictReport])
+
+  // Re-run pipeline after conflict resolution
+  const handleRerunAfterConflicts = useCallback(async () => {
+    if (!conflictReport || !conflictReport.allResolved) return
+
+    setIsRunning(true)
+    setResult(null)
+    setActiveTab("overview")
 
     const pipelineResult = await runApplyPipeline(
       project,
       existingIds,
       maxIds,
-      (p) => setProgress(p)
+      existingDbRecords,
+      (p) => setProgress(p),
+      conflictReport
     )
 
     setResult(pipelineResult)
@@ -167,15 +224,83 @@ export function SmartApplyView({ onBack }: SmartApplyViewProps) {
     if (pipelineResult.success) {
       setActiveTab("sql-preview")
     }
-  }, [])
+  }, [project, existingIds, maxIds, existingDbRecords, conflictReport])
 
-  // Simulate execution (no real DB)
+  // Resolve a conflict
+  const handleResolveConflict = useCallback(
+    (entityId: string, resolution: ConflictResolution) => {
+      if (!conflictReport) return
+
+      const updated = { ...conflictReport }
+      updated.conflicts = updated.conflicts.map((c) => {
+        if (c.entityId !== entityId) return c
+
+        const newConflict = { ...c, resolution }
+
+        // If generating new ID, allocate one now
+        if (resolution === "generate_new_id") {
+          newConflict.generatedNewId = generateSafeId(
+            c.table,
+            existingIds,
+            maxIds
+          )
+        } else {
+          newConflict.generatedNewId = null
+        }
+
+        return newConflict
+      })
+      updated.resolvedCount = updated.conflicts.filter((c) => c.resolution !== null).length
+      updated.allResolved = updated.conflicts.every((c) => c.resolution !== null)
+
+      setConflictReport(updated)
+    },
+    [conflictReport, existingIds, maxIds]
+  )
+
+  // Toggle a field for update
+  const handleToggleField = useCallback(
+    (entityId: string, fieldName: string) => {
+      if (!conflictReport) return
+
+      const updated = { ...conflictReport }
+      updated.conflicts = updated.conflicts.map((c) => {
+        if (c.entityId !== entityId) return c
+        const newSelected = new Set(c.selectedFields)
+        if (newSelected.has(fieldName)) {
+          newSelected.delete(fieldName)
+        } else {
+          newSelected.add(fieldName)
+        }
+        return { ...c, selectedFields: newSelected }
+      })
+      setConflictReport(updated)
+    },
+    [conflictReport]
+  )
+
+  // Edit a field value inline
+  const handleEditFieldValue = useCallback(
+    (entityId: string, fieldName: string, value: unknown) => {
+      if (!conflictReport) return
+
+      const updated = { ...conflictReport }
+      updated.conflicts = updated.conflicts.map((c) => {
+        if (c.entityId !== entityId) return c
+        const newEdited = new Map(c.editedValues)
+        newEdited.set(fieldName, value)
+        return { ...c, editedValues: newEdited }
+      })
+      setConflictReport(updated)
+    },
+    [conflictReport]
+  )
+
+  // Simulate execution
   const handleSimulateExecute = useCallback(async () => {
     if (!result) return
     setActiveTab("execution")
     setExecutionSimulated(false)
-
-    // Simulate execution delay
     await new Promise((r) => setTimeout(r, 1500))
     setExecutionSimulated(true)
   }, [result])
@@ -187,7 +312,7 @@ export function SmartApplyView({ onBack }: SmartApplyViewProps) {
     navigator.clipboard.writeText(fullScript)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
-  }, [result])
+  }, [result, project])
 
   // Download SQL
   const handleDownloadSQL = useCallback(() => {
@@ -202,13 +327,15 @@ export function SmartApplyView({ onBack }: SmartApplyViewProps) {
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-  }, [result])
+  }, [result, project])
 
   const handleReset = useCallback(() => {
     setProgress(null)
     setResult(null)
     setIsRunning(false)
     setExecutionSimulated(false)
+    setConflictReport(null)
+    setExpandedConflict(null)
     setActiveTab("overview")
     setExpandedStatements(new Set())
   }, [])
@@ -318,19 +445,36 @@ export function SmartApplyView({ onBack }: SmartApplyViewProps) {
             </Button>
           )}
 
-          <Button
-            size="sm"
-            className="gap-1.5 bg-emerald-600 text-xs text-foreground hover:bg-emerald-700"
-            onClick={handleRunPipeline}
-            disabled={isRunning}
-          >
-            {isRunning ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <Play className="h-3 w-3" />
-            )}
-            {isRunning ? "Running..." : "Run Pipeline"}
-          </Button>
+          {/* Main action button */}
+          {conflictReport?.allResolved && !result?.success ? (
+            <Button
+              size="sm"
+              className="gap-1.5 bg-emerald-600 text-xs text-foreground hover:bg-emerald-700"
+              onClick={handleRerunAfterConflicts}
+              disabled={isRunning}
+            >
+              {isRunning ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3 w-3" />
+              )}
+              {isRunning ? "Running..." : "Re-run Pipeline"}
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              className="gap-1.5 bg-emerald-600 text-xs text-foreground hover:bg-emerald-700"
+              onClick={handleRunPipeline}
+              disabled={isRunning}
+            >
+              {isRunning ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Play className="h-3 w-3" />
+              )}
+              {isRunning ? "Running..." : "Run Pipeline"}
+            </Button>
+          )}
         </header>
 
         {/* Tab Bar */}
@@ -339,15 +483,17 @@ export function SmartApplyView({ onBack }: SmartApplyViewProps) {
             const isActive = activeTab === tab.id
             const TabIcon = tab.icon
             const isDisabled =
-              !result &&
+              !result && !conflictReport &&
               tab.id !== "overview" &&
               !(isRunning && tab.id === "overview")
+            const hasConflictBadge =
+              tab.id === "conflicts" && conflictReport && unresolvedCount > 0
             return (
               <button
                 key={tab.id}
                 onClick={() => !isDisabled && setActiveTab(tab.id)}
                 disabled={isDisabled}
-                className={`flex h-10 items-center gap-1.5 border-b-2 px-3 text-xs transition-colors ${
+                className={`relative flex h-10 items-center gap-1.5 border-b-2 px-3 text-xs transition-colors ${
                   isActive
                     ? "border-foreground text-foreground"
                     : isDisabled
@@ -357,6 +503,16 @@ export function SmartApplyView({ onBack }: SmartApplyViewProps) {
               >
                 <TabIcon className="h-3 w-3" />
                 {tab.label}
+                {hasConflictBadge && (
+                  <span className="ml-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500/20 px-1 text-[9px] font-medium text-amber-400">
+                    {unresolvedCount}
+                  </span>
+                )}
+                {tab.id === "conflicts" &&
+                  conflictReport?.allResolved &&
+                  conflictReport.totalConflicts > 0 && (
+                    <CheckCircle2 className="ml-1 h-3 w-3 text-emerald-400" />
+                  )}
               </button>
             )
           })}
@@ -372,6 +528,19 @@ export function SmartApplyView({ onBack }: SmartApplyViewProps) {
                   progress={progress}
                   result={result}
                   isRunning={isRunning}
+                  conflictReport={conflictReport}
+                />
+              )}
+              {activeTab === "conflicts" && (
+                <ConflictsPanel
+                  conflictReport={conflictReport}
+                  expandedConflict={expandedConflict}
+                  onExpandConflict={setExpandedConflict}
+                  onResolve={handleResolveConflict}
+                  onToggleField={handleToggleField}
+                  onEditField={handleEditFieldValue}
+                  existingIds={existingIds}
+                  maxIds={maxIds}
                 />
               )}
               {activeTab === "dependencies" && result && (
@@ -385,7 +554,6 @@ export function SmartApplyView({ onBack }: SmartApplyViewProps) {
                   result={result}
                   expandedStatements={expandedStatements}
                   toggleStatement={toggleStatement}
-                  targetDb={project.targetDatabase}
                 />
               )}
               {activeTab === "execution" && result && (
@@ -412,13 +580,14 @@ function OverviewPanel({
   progress,
   result,
   isRunning,
+  conflictReport,
 }: {
   project: ReturnType<typeof createMockProject>
   progress: PipelineProgress | null
   result: ApplyResult | null
   isRunning: boolean
+  conflictReport: ConflictReport | null
 }) {
-  // Entity stats by env
   const envGroups = new Map<string, number>()
   for (const e of project.entities) {
     envGroups.set(e.envId, (envGroups.get(e.envId) ?? 0) + 1)
@@ -441,7 +610,6 @@ function OverviewPanel({
           </div>
         </div>
 
-        {/* Entity breakdown */}
         <div className="flex flex-wrap gap-3">
           {Array.from(envGroups.entries()).map(([env, count]) => (
             <div
@@ -506,14 +674,19 @@ function OverviewPanel({
                 : false
               const isCurrent = progress?.stage === stage
               const isError = progress?.stage === "error" && i === progress.stageIndex
-              const isFutureStage = progress ? progress.stageIndex < i : true
+              const isWaiting =
+                stage === "detecting_conflicts" &&
+                conflictReport &&
+                !conflictReport.allResolved &&
+                !isRunning
 
               return (
                 <div key={stage} className="flex items-center gap-3">
-                  {/* Status indicator */}
                   <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center">
                     {isError ? (
                       <XCircle className="h-4 w-4 text-red-400" />
+                    ) : isWaiting ? (
+                      <AlertTriangle className="h-4 w-4 text-amber-400" />
                     ) : isCompleted ? (
                       <CheckCircle2 className="h-4 w-4 text-emerald-400" />
                     ) : isCurrent ? (
@@ -523,21 +696,27 @@ function OverviewPanel({
                     )}
                   </div>
 
-                  {/* Stage info */}
                   <div className="min-w-0 flex-1">
                     <p
                       className={`text-xs font-medium ${
-                        isCompleted
-                          ? "text-emerald-400"
-                          : isCurrent
-                            ? "text-foreground"
-                            : isError
-                              ? "text-red-400"
-                              : "text-muted-foreground/50"
+                        isWaiting
+                          ? "text-amber-400"
+                          : isCompleted
+                            ? "text-emerald-400"
+                            : isCurrent
+                              ? "text-foreground"
+                              : isError
+                                ? "text-red-400"
+                                : "text-muted-foreground/50"
                       }`}
                     >
                       {STAGE_LABELS[stage]}
                     </p>
+                    {isWaiting && (
+                      <p className="mt-0.5 text-[10px] text-amber-400/70">
+                        Waiting for user to resolve {conflictReport.totalConflicts - conflictReport.resolvedCount} conflict(s)
+                      </p>
+                    )}
                     {isCurrent && progress && (
                       <p className="mt-0.5 text-[10px] text-muted-foreground">
                         {progress.message}
@@ -545,7 +724,6 @@ function OverviewPanel({
                     )}
                   </div>
 
-                  {/* Progress bar */}
                   {(isCurrent || isCompleted) && (
                     <div className="h-1 w-20 overflow-hidden rounded-full bg-border">
                       <div
@@ -570,28 +748,12 @@ function OverviewPanel({
           </div>
 
           {/* Result Summary */}
-          {result && !isRunning && (
-            <div
-              className={`mt-4 flex items-center gap-2 rounded-md border px-3 py-2 ${
-                result.success
-                  ? "border-emerald-500/20 bg-emerald-500/5"
-                  : "border-red-500/20 bg-red-500/5"
-              }`}
-            >
-              {result.success ? (
-                <ShieldCheck className="h-4 w-4 text-emerald-400" />
-              ) : (
-                <ShieldAlert className="h-4 w-4 text-red-400" />
-              )}
+          {result && !isRunning && result.success && (
+            <div className="mt-4 flex items-center gap-2 rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
+              <ShieldCheck className="h-4 w-4 text-emerald-400" />
               <div>
-                <p
-                  className={`text-xs font-medium ${
-                    result.success ? "text-emerald-400" : "text-red-400"
-                  }`}
-                >
-                  {result.success
-                    ? `Pipeline complete: ${result.totalStatements} statements generated`
-                    : `Pipeline failed: ${result.errors.length} error(s)`}
+                <p className="text-xs font-medium text-emerald-400">
+                  Pipeline complete: {result.totalStatements} statements generated
                 </p>
                 <p className="text-[10px] text-muted-foreground">
                   {result.executionTimeMs}ms -- {result.affectedTables.length} tables
@@ -601,7 +763,6 @@ function OverviewPanel({
             </div>
           )}
 
-          {/* Errors */}
           {result?.errors.map((err, i) => (
             <div
               key={i}
@@ -622,7 +783,7 @@ function OverviewPanel({
       )}
 
       {/* Idle state */}
-      {!isRunning && !result && (
+      {!isRunning && !result && !conflictReport && (
         <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-card/50 py-12">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/10">
             <Play className="h-5 w-5 text-emerald-400" />
@@ -632,10 +793,387 @@ function OverviewPanel({
           </p>
           <p className="mt-1 max-w-xs text-center text-xs text-muted-foreground">
             Click &quot;Run Pipeline&quot; to validate, analyze dependencies,
-            resolve IDs, and generate a safe SQL deployment script.
+            detect conflicts, resolve IDs, and generate a safe SQL deployment script.
           </p>
         </div>
       )}
+    </div>
+  )
+}
+
+// =============================================
+// CONFLICTS PANEL (Interactive Resolution)
+// =============================================
+
+function ConflictsPanel({
+  conflictReport,
+  expandedConflict,
+  onExpandConflict,
+  onResolve,
+  onToggleField,
+  onEditField,
+  existingIds,
+  maxIds,
+}: {
+  conflictReport: ConflictReport | null
+  expandedConflict: string | null
+  onExpandConflict: (id: string | null) => void
+  onResolve: (entityId: string, resolution: ConflictResolution) => void
+  onToggleField: (entityId: string, fieldName: string) => void
+  onEditField: (entityId: string, fieldName: string, value: unknown) => void
+  existingIds: Map<string, Set<number>>
+  maxIds: Map<string, number>
+}) {
+  if (!conflictReport || conflictReport.totalConflicts === 0) {
+    return (
+      <div className="mx-auto max-w-3xl">
+        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-card/50 py-12">
+          <CheckCircle2 className="h-8 w-8 text-emerald-400" />
+          <p className="mt-3 text-sm font-medium text-foreground">No Conflicts</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            All entities can be safely applied without conflicts.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mx-auto max-w-4xl">
+      {/* Summary */}
+      <div className="mb-4 flex items-center gap-4 rounded-lg border border-border bg-card px-4 py-3">
+        <AlertTriangle className="h-4 w-4 text-amber-400" />
+        <span className="text-xs text-foreground">
+          <span className="font-semibold">{conflictReport.totalConflicts}</span>{" "}
+          conflict{conflictReport.totalConflicts !== 1 ? "s" : ""} detected
+        </span>
+        <div className="h-4 w-px bg-border" />
+        <span className="text-xs text-emerald-400">
+          {conflictReport.resolvedCount} resolved
+        </span>
+        {!conflictReport.allResolved && (
+          <>
+            <div className="h-4 w-px bg-border" />
+            <span className="text-xs text-amber-400">
+              {conflictReport.totalConflicts - conflictReport.resolvedCount} remaining
+            </span>
+          </>
+        )}
+        {conflictReport.allResolved && (
+          <>
+            <div className="h-4 w-px bg-border" />
+            <div className="flex items-center gap-1.5">
+              <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+              <span className="text-xs font-medium text-emerald-400">
+                All resolved — ready to re-run
+              </span>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Conflict Cards */}
+      <div className="flex flex-col gap-3">
+        {conflictReport.conflicts.map((conflict) => {
+          const isExpanded = expandedConflict === conflict.entityId
+          const isResolved = conflict.resolution !== null
+
+          return (
+            <div
+              key={conflict.entityId}
+              className={`rounded-lg border ${
+                isResolved
+                  ? conflict.resolution === "cancel"
+                    ? "border-muted-foreground/20 bg-card/50 opacity-60"
+                    : "border-emerald-500/20 bg-card"
+                  : "border-amber-500/30 bg-card"
+              }`}
+            >
+              {/* Conflict Header */}
+              <button
+                onClick={() =>
+                  onExpandConflict(isExpanded ? null : conflict.entityId)
+                }
+                className="flex w-full items-center gap-3 px-4 py-3 text-left"
+              >
+                {isExpanded ? (
+                  <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                ) : (
+                  <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                )}
+
+                <div className="flex h-7 w-7 items-center justify-center rounded-md bg-amber-500/10">
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
+                </div>
+
+                <div className="flex-1">
+                  <p className="text-xs font-semibold text-foreground">
+                    {conflict.entityName}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {conflict.table} -- id:{conflict.desiredId} -- {conflict.changedFieldCount} field(s) differ
+                  </p>
+                </div>
+
+                {/* Resolution badge */}
+                {conflict.resolution === "update" && (
+                  <Badge className="border-blue-500/20 bg-blue-500/10 text-[9px] text-blue-400">
+                    UPDATE
+                  </Badge>
+                )}
+                {conflict.resolution === "generate_new_id" && (
+                  <Badge className="border-emerald-500/20 bg-emerald-500/10 text-[9px] text-emerald-400">
+                    NEW ID: {conflict.generatedNewId}
+                  </Badge>
+                )}
+                {conflict.resolution === "cancel" && (
+                  <Badge className="border-muted-foreground/20 bg-muted/50 text-[9px] text-muted-foreground">
+                    CANCELLED
+                  </Badge>
+                )}
+                {!isResolved && (
+                  <Badge className="border-amber-500/20 bg-amber-500/10 text-[9px] text-amber-400">
+                    UNRESOLVED
+                  </Badge>
+                )}
+              </button>
+
+              {/* Expanded Detail */}
+              {isExpanded && (
+                <div className="border-t border-border px-4 pb-4 pt-3">
+                  {/* Resolution Buttons */}
+                  <div className="mb-4 flex items-center gap-2">
+                    <span className="mr-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                      Resolve:
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={`h-7 gap-1.5 text-[11px] ${
+                        conflict.resolution === "update"
+                          ? "border-blue-500/30 bg-blue-500/10 text-blue-400"
+                          : ""
+                      }`}
+                      onClick={() => onResolve(conflict.entityId, "update")}
+                    >
+                      <Pencil className="h-3 w-3" />
+                      Update Existing
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={`h-7 gap-1.5 text-[11px] ${
+                        conflict.resolution === "generate_new_id"
+                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                          : ""
+                      }`}
+                      onClick={() =>
+                        onResolve(conflict.entityId, "generate_new_id")
+                      }
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      Generate New ID
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className={`h-7 gap-1.5 text-[11px] ${
+                        conflict.resolution === "cancel"
+                          ? "border-red-500/30 bg-red-500/10 text-red-400"
+                          : ""
+                      }`}
+                      onClick={() => onResolve(conflict.entityId, "cancel")}
+                    >
+                      <Ban className="h-3 w-3" />
+                      Cancel Entity
+                    </Button>
+                  </div>
+
+                  {/* Generated New ID display */}
+                  {conflict.resolution === "generate_new_id" &&
+                    conflict.generatedNewId && (
+                      <div className="mb-4 flex items-center gap-3 rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
+                        <Sparkles className="h-3.5 w-3.5 text-emerald-400" />
+                        <div>
+                          <p className="text-[11px] font-medium text-emerald-400">
+                            New ID allocated:{" "}
+                            <span className="font-mono">
+                              {conflict.generatedNewId}
+                            </span>
+                          </p>
+                          <p className="text-[10px] text-emerald-400/60">
+                            Entity will be INSERTed as a new record. All
+                            relations will be remapped automatically.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                  {/* Cancel info */}
+                  {conflict.resolution === "cancel" && (
+                    <div className="mb-4 flex items-center gap-3 rounded-md border border-muted-foreground/20 bg-muted/30 px-3 py-2">
+                      <Ban className="h-3.5 w-3.5 text-muted-foreground" />
+                      <p className="text-[11px] text-muted-foreground">
+                        This entity will be excluded from the deployment
+                        script entirely.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Diff Table (only for update mode or unresolved) */}
+                  {conflict.resolution !== "cancel" && (
+                    <div className="rounded-lg border border-border">
+                      {/* Diff Table Header */}
+                      <div className="flex items-center gap-0 border-b border-border bg-muted/30 px-3 py-2">
+                        {conflict.resolution === "update" && (
+                          <span className="w-8 text-[10px] font-medium uppercase tracking-wider text-muted-foreground" />
+                        )}
+                        <span className="w-36 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                          Field
+                        </span>
+                        <span className="flex-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                          Database Value
+                        </span>
+                        <span className="w-8 text-center text-[10px] text-muted-foreground" />
+                        <span className="flex-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                          Project Value
+                        </span>
+                        <span className="w-16 text-right text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                          Status
+                        </span>
+                      </div>
+
+                      {/* Diff Rows */}
+                      {conflict.diffs.map((diff, di) => {
+                        const isSelected = conflict.selectedFields.has(diff.fieldName)
+                        const hasEdit = conflict.editedValues.has(diff.fieldName)
+                        const displayNewValue = hasEdit
+                          ? String(conflict.editedValues.get(diff.fieldName) ?? "")
+                          : String(diff.newValue ?? "NULL")
+
+                        return (
+                          <div
+                            key={diff.fieldName}
+                            className={`flex items-center gap-0 px-3 py-2 ${
+                              di < conflict.diffs.length - 1
+                                ? "border-b border-border"
+                                : ""
+                            } ${
+                              diff.changed
+                                ? isSelected && conflict.resolution === "update"
+                                  ? "bg-blue-500/5"
+                                  : "bg-amber-500/5"
+                                : ""
+                            }`}
+                          >
+                            {/* Checkbox for update mode */}
+                            {conflict.resolution === "update" && (
+                              <div className="w-8">
+                                {diff.changed && (
+                                  <button
+                                    onClick={() =>
+                                      onToggleField(
+                                        conflict.entityId,
+                                        diff.fieldName
+                                      )
+                                    }
+                                    className={`flex h-4 w-4 items-center justify-center rounded border ${
+                                      isSelected
+                                        ? "border-blue-500 bg-blue-500"
+                                        : "border-muted-foreground/30"
+                                    }`}
+                                  >
+                                    {isSelected && (
+                                      <Check className="h-2.5 w-2.5 text-foreground" />
+                                    )}
+                                  </button>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Field name */}
+                            <span className="w-36 font-mono text-[11px] text-foreground">
+                              {diff.fieldName}
+                            </span>
+
+                            {/* Old (DB) value */}
+                            <span
+                              className={`flex-1 font-mono text-[11px] ${
+                                diff.changed
+                                  ? "text-red-400"
+                                  : "text-muted-foreground"
+                              }`}
+                            >
+                              {String(diff.oldValue ?? "NULL")}
+                            </span>
+
+                            {/* Arrow */}
+                            <div className="flex w-8 justify-center">
+                              {diff.changed && (
+                                <ArrowRight className="h-3 w-3 text-amber-400" />
+                              )}
+                            </div>
+
+                            {/* New (Project) value — editable if update mode */}
+                            <div className="flex-1">
+                              {conflict.resolution === "update" &&
+                              diff.changed &&
+                              isSelected ? (
+                                <Input
+                                  value={displayNewValue}
+                                  onChange={(e) =>
+                                    onEditField(
+                                      conflict.entityId,
+                                      diff.fieldName,
+                                      isNaN(Number(e.target.value))
+                                        ? e.target.value
+                                        : Number(e.target.value)
+                                    )
+                                  }
+                                  className="h-6 border-blue-500/30 bg-blue-500/5 px-1.5 font-mono text-[11px] text-blue-400"
+                                />
+                              ) : (
+                                <span
+                                  className={`font-mono text-[11px] ${
+                                    diff.changed
+                                      ? "text-emerald-400"
+                                      : "text-muted-foreground"
+                                  }`}
+                                >
+                                  {displayNewValue}
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Status */}
+                            <span className="w-16 text-right">
+                              {diff.changed ? (
+                                <Badge
+                                  variant="outline"
+                                  className="border-amber-500/20 text-[9px] text-amber-400"
+                                >
+                                  changed
+                                </Badge>
+                              ) : (
+                                <Badge
+                                  variant="outline"
+                                  className="border-border text-[9px] text-muted-foreground/50"
+                                >
+                                  same
+                                </Badge>
+                              )}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -719,7 +1257,6 @@ function DependenciesPanel({ result }: { result: ApplyResult }) {
 
       {/* Table */}
       <div className="rounded-lg border border-border bg-card">
-        {/* Header */}
         <div className="flex items-center gap-4 border-b border-border bg-muted/30 px-4 py-2">
           <span className="w-36 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
             Source
@@ -738,7 +1275,6 @@ function DependenciesPanel({ result }: { result: ApplyResult }) {
           </span>
         </div>
 
-        {/* Rows */}
         {filtered.length === 0 ? (
           <div className="flex items-center justify-center py-8 text-xs text-muted-foreground">
             No dependencies match this filter
@@ -806,7 +1342,6 @@ function DependenciesPanel({ result }: { result: ApplyResult }) {
 function IdResolutionPanel({ result }: { result: ApplyResult }) {
   const idReport = result.idResolutionReport
 
-  // Flatten all mappings for display
   const allMappings: (IdMapping & { table: string })[] = []
   for (const [table, tableMap] of idReport.mappings) {
     for (const [oldId, newId] of tableMap) {
@@ -932,16 +1467,13 @@ function SqlPreviewPanel({
   result,
   expandedStatements,
   toggleStatement,
-  targetDb,
 }: {
   result: ApplyResult
   expandedStatements: Set<number>
   toggleStatement: (idx: number) => void
-  targetDb: ReturnType<typeof createMockProject>["targetDatabase"]
 }) {
   const statements = result.generatedSql
 
-  // Group by category
   const groups = new Map<ExecutionCategory, SqlStatement[]>()
   for (const stmt of statements) {
     if (!groups.has(stmt.category)) groups.set(stmt.category, [])
@@ -979,9 +1511,21 @@ function SqlPreviewPanel({
         )}
         <div className="h-4 w-px bg-border" />
         <span className="text-xs text-muted-foreground">
-          Execution order: base → main → secondary → relations
+          Execution order: base - main - secondary - relations
         </span>
       </div>
+
+      {/* Conflict-aware banner */}
+      {result.conflictReport.totalConflicts > 0 && (
+        <div className="mb-4 flex items-center gap-3 rounded-md border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
+          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+          <p className="text-[11px] text-emerald-400">
+            SQL reflects {result.conflictReport.totalConflicts} resolved
+            conflict(s) — only selected changed fields included in UPDATE
+            statements.
+          </p>
+        </div>
+      )}
 
       {/* Grouped Statements */}
       {Array.from(groups.entries()).map(([category, stmts]) => (
@@ -1011,7 +1555,6 @@ function SqlPreviewPanel({
                     i < stmts.length - 1 ? "border-b border-border" : ""
                   }
                 >
-                  {/* Row Header */}
                   <button
                     onClick={() => toggleStatement(globalIdx)}
                     className="flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-muted/30"
@@ -1050,7 +1593,6 @@ function SqlPreviewPanel({
                     )}
                   </button>
 
-                  {/* SQL Code */}
                   {isExpanded && (
                     <div className="border-t border-border bg-background px-4 py-3">
                       <pre className="overflow-x-auto font-mono text-[11px] leading-relaxed">
@@ -1088,9 +1630,8 @@ function SqlPreviewPanel({
 }
 
 function highlightSql(line: string): React.ReactNode {
-  // Simple keyword highlighting
   const keywords =
-    /\b(IF|EXISTS|SELECT|BEGIN|END|UPDATE|INSERT|INTO|SET|VALUES|WHERE|FROM|NOT|NULL|AND|OR|DECLARE|PRINT|CAST|AS|VARCHAR|NVARCHAR|INT)\b/g
+    /\b(IF|EXISTS|SELECT|BEGIN|END|UPDATE|INSERT|INTO|SET|VALUES|WHERE|FROM|NOT|NULL|AND|OR|DECLARE|PRINT|CAST|AS|VARCHAR|NVARCHAR|INT|SKIP)\b/g
 
   if (line.trimStart().startsWith("--")) {
     return <span className="text-muted-foreground italic">{line}</span>
@@ -1208,6 +1749,10 @@ function ExecutionPanel({
           <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
             <CheckCircle2 className="h-3 w-3 text-emerald-400" />
             IF EXISTS guards -- no duplicate records
+          </div>
+          <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+            <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+            Diff-aware UPDATEs -- only changed fields modified
           </div>
           <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
             <CheckCircle2 className="h-3 w-3 text-emerald-400" />

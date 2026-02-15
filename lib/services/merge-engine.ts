@@ -69,6 +69,40 @@ export interface IdResolutionReport {
   reservedRanges: Map<string, [number, number]>
 }
 
+// ---- Conflict Resolution Types ----
+
+export type ConflictResolution = "update" | "generate_new_id" | "cancel"
+
+export interface FieldDiff {
+  fieldName: string
+  oldValue: unknown
+  newValue: unknown
+  changed: boolean
+}
+
+export interface ConflictRecord {
+  entityId: string
+  entityName: string
+  envId: EnvironmentId
+  table: string
+  desiredId: number
+  existingDbRecord: Record<string, unknown>
+  projectRecord: Record<string, unknown>
+  diffs: FieldDiff[]
+  changedFieldCount: number
+  resolution: ConflictResolution | null
+  selectedFields: Set<string> // which fields to update (when resolution=update)
+  editedValues: Map<string, unknown> // manual edits from user
+  generatedNewId: number | null // new ID when resolution=generate_new_id
+}
+
+export interface ConflictReport {
+  conflicts: ConflictRecord[]
+  totalConflicts: number
+  resolvedCount: number
+  allResolved: boolean
+}
+
 // ---- SQL Generation Types ----
 
 export type SqlOperationType = "INSERT" | "UPDATE" | "MERGE"
@@ -99,6 +133,8 @@ export type PipelineStage =
   | "idle"
   | "validating"
   | "analyzing_dependencies"
+  | "detecting_conflicts"
+  | "resolving_conflicts"
   | "resolving_ids"
   | "generating_sql"
   | "preview"
@@ -124,6 +160,7 @@ export interface ApplyResult {
   totalStatements: number
   dependencyReport: DependencyReport
   idResolutionReport: IdResolutionReport
+  conflictReport: ConflictReport
   generatedSql: SqlStatement[]
   errors: ApplyError[]
   executionTimeMs: number
@@ -222,12 +259,11 @@ const CRITICAL_DEPENDENCIES: Record<EnvironmentId, EnvironmentId[]> = {
 
 export function analyzeDependencies(
   project: WorkingProject,
-  existingDbIds: Map<string, Set<number>> // table -> set of existing IDs
+  existingDbIds: Map<string, Set<number>>
 ): DependencyReport {
   const entries: DependencyEntry[] = []
   const projectIdsByEnv = new Map<EnvironmentId, Set<number>>()
 
-  // Index project entity IDs
   for (const entity of project.entities) {
     if (!projectIdsByEnv.has(entity.envId)) {
       projectIdsByEnv.set(entity.envId, new Set())
@@ -235,7 +271,6 @@ export function analyzeDependencies(
     projectIdsByEnv.get(entity.envId)!.add(entity.desiredId)
   }
 
-  // Scan all references
   for (const entity of project.entities) {
     for (const ref of entity.references) {
       const targetTable = ENV_TABLE_MAP[ref.targetEnv]
@@ -283,6 +318,149 @@ export function analyzeDependencies(
 }
 
 // =============================================
+// CONFLICT DETECTION & DIFF ENGINE
+// =============================================
+
+export function detectConflicts(
+  project: WorkingProject,
+  existingIds: Map<string, Set<number>>,
+  existingDbRecords: Map<string, Map<number, Record<string, unknown>>>
+): ConflictReport {
+  const conflicts: ConflictRecord[] = []
+
+  for (const entity of project.entities) {
+    const table = ENV_TABLE_MAP[entity.envId]
+    const existing = existingIds.get(table) ?? new Set()
+
+    if (existing.has(entity.desiredId)) {
+      // This ID exists in DB -> potential conflict
+      const dbRecords = existingDbRecords.get(table)
+      const dbRecord = dbRecords?.get(entity.desiredId) ?? {}
+
+      const diffs = computeFieldDiffs(entity.fields, dbRecord)
+      const changedFieldCount = diffs.filter((d) => d.changed).length
+
+      conflicts.push({
+        entityId: entity.id,
+        entityName: entity.entityName,
+        envId: entity.envId,
+        table,
+        desiredId: entity.desiredId,
+        existingDbRecord: dbRecord,
+        projectRecord: entity.fields,
+        diffs,
+        changedFieldCount,
+        resolution: null,
+        selectedFields: new Set(diffs.filter((d) => d.changed).map((d) => d.fieldName)),
+        editedValues: new Map(),
+        generatedNewId: null,
+      })
+    }
+  }
+
+  return {
+    conflicts,
+    totalConflicts: conflicts.length,
+    resolvedCount: conflicts.filter((c) => c.resolution !== null).length,
+    allResolved: conflicts.length === 0 || conflicts.every((c) => c.resolution !== null),
+  }
+}
+
+export function computeFieldDiffs(
+  projectFields: Record<string, unknown>,
+  dbFields: Record<string, unknown>
+): FieldDiff[] {
+  const allKeys = new Set([
+    ...Object.keys(projectFields),
+    ...Object.keys(dbFields),
+  ])
+
+  const diffs: FieldDiff[] = []
+  for (const key of allKeys) {
+    if (key === "id") continue
+    const oldVal = dbFields[key]
+    const newVal = projectFields[key]
+    diffs.push({
+      fieldName: key,
+      oldValue: oldVal ?? null,
+      newValue: newVal ?? null,
+      changed: String(oldVal ?? "") !== String(newVal ?? ""),
+    })
+  }
+
+  return diffs
+}
+
+// Generate a safe new ID for a given table
+export function generateSafeId(
+  table: string,
+  existingIds: Map<string, Set<number>>,
+  maxIds: Map<string, number>,
+  currentMappings?: Map<string, Map<number, number>>
+): number {
+  const existing = existingIds.get(table) ?? new Set()
+  const max = maxIds.get(table) ?? 100000
+  let newId = max + 1
+
+  // Also avoid IDs already used in current mappings
+  const mappedIds = new Set<number>()
+  if (currentMappings) {
+    const tableMap = currentMappings.get(table)
+    if (tableMap) {
+      for (const resolvedId of tableMap.values()) {
+        mappedIds.add(resolvedId)
+      }
+    }
+  }
+
+  while (existing.has(newId) || mappedIds.has(newId)) {
+    newId++
+  }
+
+  return newId
+}
+
+// Generate partial UPDATE SQL with only changed fields (diff-aware)
+export function generateDiffAwareUpdate(
+  table: string,
+  idColumn: string,
+  id: number,
+  conflict: ConflictRecord
+): string {
+  const fieldsToUpdate: [string, unknown][] = []
+
+  for (const diff of conflict.diffs) {
+    if (!conflict.selectedFields.has(diff.fieldName)) continue
+    if (!diff.changed) continue
+
+    const value = conflict.editedValues.has(diff.fieldName)
+      ? conflict.editedValues.get(diff.fieldName)
+      : diff.newValue
+
+    fieldsToUpdate.push([diff.fieldName, value])
+  }
+
+  if (fieldsToUpdate.length === 0) {
+    return `-- SKIP: No changed fields selected for ${table} id=${id}`
+  }
+
+  const setClauses = fieldsToUpdate
+    .map(([key, val]) => `    [${key}] = ${escapeValue(val)}`)
+    .join(",\n")
+
+  return [
+    `-- DIFF-AWARE UPDATE (${fieldsToUpdate.length} field(s) changed)`,
+    `IF EXISTS (SELECT 1 FROM [dbo].[${table}] WHERE [${idColumn}] = ${id})`,
+    `BEGIN`,
+    `  UPDATE [dbo].[${table}]`,
+    `  SET`,
+    setClauses,
+    `  WHERE [${idColumn}] = ${id}`,
+    `END`,
+  ].join("\n")
+}
+
+// =============================================
 // ID RESOLUTION SYSTEM
 // =============================================
 
@@ -290,16 +468,15 @@ export function resolveIds(
   project: WorkingProject,
   existingIds: Map<string, Set<number>>,
   maxIds: Map<string, number>,
+  conflictReport?: ConflictReport,
   reservedRanges?: Map<string, [number, number]>
 ): IdResolutionReport {
   const mappings = new Map<string, Map<number, number>>()
   const conflicts: IdMapping[] = []
   const ranges = reservedRanges ?? new Map<string, [number, number]>()
 
-  // Track next available ID per table
   const nextId = new Map<string, number>()
   for (const [table, max] of maxIds) {
-    // Skip reserved ranges
     const reserved = ranges.get(table)
     let startFrom = max + 1
     if (reserved && startFrom >= reserved[0] && startFrom <= reserved[1]) {
@@ -316,15 +493,39 @@ export function resolveIds(
     const tableMap = mappings.get(table)!
     const existing = existingIds.get(table) ?? new Set()
 
+    // Check if this entity has a conflict resolution
+    const conflictRecord = conflictReport?.conflicts.find(
+      (c) => c.entityId === entity.id
+    )
+
+    if (conflictRecord) {
+      if (conflictRecord.resolution === "generate_new_id" && conflictRecord.generatedNewId) {
+        // User chose new ID
+        tableMap.set(entity.desiredId, conflictRecord.generatedNewId)
+        conflicts.push({
+          originalId: entity.desiredId,
+          resolvedId: conflictRecord.generatedNewId,
+          table,
+          wasConflict: true,
+        })
+        continue
+      } else if (conflictRecord.resolution === "update") {
+        // Keep original ID — will UPDATE existing record
+        tableMap.set(entity.desiredId, entity.desiredId)
+        continue
+      } else if (conflictRecord.resolution === "cancel") {
+        // Skip entirely — don't add mapping
+        continue
+      }
+    }
+
     if (!existing.has(entity.desiredId)) {
-      // ID is free — use as-is
       tableMap.set(entity.desiredId, entity.desiredId)
     } else {
-      // Conflict — generate new ID
+      // Auto-resolve: generate new ID
       let newId = nextId.get(table) ?? 100000
       const reserved = ranges.get(table)
 
-      // Skip reserved ranges
       while (
         existing.has(newId) ||
         (reserved && newId >= reserved[0] && newId <= reserved[1])
@@ -365,7 +566,6 @@ function remapEntityReferences(
     }
   }
 
-  // Also remap the entity's own ID
   const ownTable = ENV_TABLE_MAP[entity.envId]
   const ownMap = idReport.mappings.get(ownTable)
   if (ownMap && ownMap.has(entity.desiredId)) {
@@ -399,7 +599,6 @@ function generateMergeStatement(
   )
 
   if (existsInDb) {
-    // UPDATE
     const setClauses = filteredFields
       .map(([key, val]) => `    [${key}] = ${escapeValue(val)}`)
       .join(",\n")
@@ -415,7 +614,6 @@ function generateMergeStatement(
       `END`,
     ].join("\n")
   } else {
-    // INSERT
     const columns = [idColumn, ...filteredFields.map(([k]) => k)]
     const values = [String(id), ...filteredFields.map(([, v]) => escapeValue(v))]
 
@@ -437,11 +635,11 @@ function generateMergeStatement(
 export function generateSqlScript(
   project: WorkingProject,
   idReport: IdResolutionReport,
-  existingIds: Map<string, Set<number>>
+  existingIds: Map<string, Set<number>>,
+  conflictReport?: ConflictReport
 ): SqlStatement[] {
   const statements: SqlStatement[] = []
 
-  // Sort entities by execution order
   const sortedEntities = [...project.entities].sort((a, b) => {
     const catA = ENV_CATEGORY[a.envId]
     const catB = ENV_CATEGORY[b.envId]
@@ -453,7 +651,12 @@ export function generateSqlScript(
     const idColumn = ENV_ID_COLUMN[entity.envId]
     const category = ENV_CATEGORY[entity.envId]
 
-    // Remap references using resolved IDs
+    // Check if cancelled
+    const conflictRecord = conflictReport?.conflicts.find(
+      (c) => c.entityId === entity.id
+    )
+    if (conflictRecord?.resolution === "cancel") continue
+
     const remappedFields = remapEntityReferences(entity, idReport)
     const resolvedId = (remappedFields["id"] as number) ?? entity.desiredId
 
@@ -465,14 +668,40 @@ export function generateSqlScript(
       ? ownMap.get(entity.desiredId) !== entity.desiredId
       : false
 
-    const operation: SqlOperationType = existsInDb ? "UPDATE" : "INSERT"
+    // If conflict was resolved as UPDATE with diff-aware approach
+    if (conflictRecord?.resolution === "update" && existsInDb) {
+      const sql = generateDiffAwareUpdate(table, idColumn, resolvedId, conflictRecord)
+      statements.push({
+        operation: "UPDATE",
+        table,
+        entityName: entity.entityName,
+        envId: entity.envId,
+        sql,
+        order: EXECUTION_ORDER[category],
+        category,
+        affectedId: resolvedId,
+        idRemapped: false,
+      })
+      continue
+    }
+
+    // If conflict generated new ID, it's now an INSERT
+    const operation: SqlOperationType =
+      conflictRecord?.resolution === "generate_new_id"
+        ? "INSERT"
+        : existsInDb
+          ? "UPDATE"
+          : "INSERT"
+
+    const effectiveExistsInDb =
+      conflictRecord?.resolution === "generate_new_id" ? false : existsInDb
 
     const sql = generateMergeStatement(
       table,
       idColumn,
       resolvedId,
       remappedFields,
-      existsInDb
+      effectiveExistsInDb
     )
 
     statements.push({
@@ -570,13 +799,16 @@ export async function runApplyPipeline(
   project: WorkingProject,
   existingIds: Map<string, Set<number>>,
   maxIds: Map<string, number>,
-  onProgress: (progress: PipelineProgress) => void
+  existingDbRecords: Map<string, Map<number, Record<string, unknown>>>,
+  onProgress: (progress: PipelineProgress) => void,
+  conflictReport?: ConflictReport
 ): Promise<ApplyResult> {
   const startTime = Date.now()
   const errors: ApplyError[] = []
   const stages: PipelineStage[] = [
     "validating",
     "analyzing_dependencies",
+    "detecting_conflicts",
     "resolving_ids",
     "generating_sql",
     "preview",
@@ -584,6 +816,7 @@ export async function runApplyPipeline(
   const stageLabels: Record<string, string> = {
     validating: "Validating Project Structure",
     analyzing_dependencies: "Analyzing Dependencies",
+    detecting_conflicts: "Detecting Conflicts",
     resolving_ids: "Resolving ID Conflicts",
     generating_sql: "Generating SQL Script",
     preview: "Preview Ready",
@@ -613,10 +846,9 @@ export async function runApplyPipeline(
       isFatal: true,
     })
     emitProgress("error", 100, "Validation failed: empty project")
-    return buildResult(false, [], emptyDepReport(), emptyIdReport(), errors, startTime)
+    return buildResult(false, [], emptyDepReport(), emptyIdReport(), emptyConflictReport(), errors, startTime)
   }
 
-  // Validate entity schemas
   for (const entity of project.entities) {
     const schema = environmentSchemas[entity.envId]
     if (!schema) {
@@ -631,7 +863,7 @@ export async function runApplyPipeline(
 
   if (errors.some((e) => e.isFatal)) {
     emitProgress("error", 100, "Validation failed")
-    return buildResult(false, [], emptyDepReport(), emptyIdReport(), errors, startTime)
+    return buildResult(false, [], emptyDepReport(), emptyIdReport(), emptyConflictReport(), errors, startTime)
   }
 
   emitProgress("validating", 100, "Project structure valid")
@@ -667,17 +899,54 @@ export async function runApplyPipeline(
         .join("; "),
       isFatal: true,
     })
-    return buildResult(false, [], depReport, emptyIdReport(), errors, startTime)
+    return buildResult(false, [], depReport, emptyIdReport(), emptyConflictReport(), errors, startTime)
   }
 
   emitProgress("analyzing_dependencies", 100, "All dependencies satisfied")
   await sleep(200)
 
-  // Stage 3: ID Resolution
+  // Stage 3: Conflict Detection
+  emitProgress("detecting_conflicts", 0, "Scanning for ID and record conflicts...")
+  await sleep(350)
+
+  const detectedConflicts = conflictReport ?? detectConflicts(project, existingIds, existingDbRecords)
+
+  emitProgress(
+    "detecting_conflicts",
+    100,
+    detectedConflicts.totalConflicts === 0
+      ? "No conflicts detected"
+      : `${detectedConflicts.totalConflicts} conflict(s) found — ${detectedConflicts.resolvedCount} resolved`
+  )
+  await sleep(200)
+
+  // If there are unresolved conflicts, pause pipeline here
+  if (!detectedConflicts.allResolved) {
+    emitProgress(
+      "detecting_conflicts",
+      100,
+      `WAITING: ${detectedConflicts.totalConflicts - detectedConflicts.resolvedCount} conflict(s) need resolution`
+    )
+    return buildResult(
+      false,
+      [],
+      depReport,
+      emptyIdReport(),
+      detectedConflicts,
+      [{
+        stage: "detecting_conflicts",
+        message: `${detectedConflicts.totalConflicts - detectedConflicts.resolvedCount} conflict(s) require resolution before proceeding`,
+        isFatal: false,
+      }],
+      startTime
+    )
+  }
+
+  // Stage 4: ID Resolution (conflict-aware)
   emitProgress("resolving_ids", 0, "Checking ID conflicts...")
   await sleep(300)
 
-  const idReport = resolveIds(project, existingIds, maxIds)
+  const idReport = resolveIds(project, existingIds, maxIds, detectedConflicts)
 
   emitProgress(
     "resolving_ids",
@@ -689,11 +958,11 @@ export async function runApplyPipeline(
   emitProgress("resolving_ids", 100, "IDs resolved")
   await sleep(200)
 
-  // Stage 4: SQL Generation
+  // Stage 5: SQL Generation (conflict-aware)
   emitProgress("generating_sql", 0, "Building merge statements...")
   await sleep(300)
 
-  const statements = generateSqlScript(project, idReport, existingIds)
+  const statements = generateSqlScript(project, idReport, existingIds, detectedConflicts)
 
   emitProgress(
     "generating_sql",
@@ -705,7 +974,7 @@ export async function runApplyPipeline(
   emitProgress("generating_sql", 100, "SQL script ready")
   await sleep(150)
 
-  // Stage 5: Preview
+  // Stage 6: Preview
   emitProgress("preview", 100, "Ready for review")
 
   const affectedTables = [...new Set(statements.map((s) => s.table))]
@@ -715,6 +984,7 @@ export async function runApplyPipeline(
     statements,
     depReport,
     idReport,
+    detectedConflicts,
     errors,
     startTime,
     affectedTables
@@ -749,11 +1019,21 @@ function emptyIdReport(): IdResolutionReport {
   }
 }
 
+function emptyConflictReport(): ConflictReport {
+  return {
+    conflicts: [],
+    totalConflicts: 0,
+    resolvedCount: 0,
+    allResolved: true,
+  }
+}
+
 function buildResult(
   success: boolean,
   statements: SqlStatement[],
   depReport: DependencyReport,
   idReport: IdResolutionReport,
+  conflictReport: ConflictReport,
   errors: ApplyError[],
   startTime: number,
   affectedTables: string[] = []
@@ -764,6 +1044,7 @@ function buildResult(
     totalStatements: statements.length,
     dependencyReport: depReport,
     idResolutionReport: idReport,
+    conflictReport,
     generatedSql: statements,
     errors,
     executionTimeMs: Date.now() - startTime,
@@ -1028,12 +1309,11 @@ export function createMockProject(): WorkingProject {
 
 export function createMockExistingIds(): Map<string, Set<number>> {
   const map = new Map<string, Set<number>>()
-  // Some IDs already exist in the DB (to test UPDATE path and conflict resolution)
-  map.set("NPCResource", new Set([50042])) // Elder Marcus exists -> UPDATE
-  map.set("ItemResource", new Set([30015, 30022])) // Dragon Scale and Guardian exist -> UPDATE
+  map.set("NPCResource", new Set([50042]))
+  map.set("ItemResource", new Set([30015, 30022]))
   map.set("MonsterResource", new Set())
   map.set("QuestResource", new Set())
-  map.set("SkillResource", new Set([5010])) // Flame Strike exists -> UPDATE
+  map.set("SkillResource", new Set([5010]))
   map.set("StateResource", new Set())
   return map
 }
@@ -1047,4 +1327,65 @@ export function createMockMaxIds(): Map<string, number> {
   map.set("SkillResource", 8000)
   map.set("StateResource", 9000)
   return map
+}
+
+// Mock DB records for entities that already exist (to power the diff engine)
+export function createMockExistingDbRecords(): Map<string, Map<number, Record<string, unknown>>> {
+  const records = new Map<string, Map<number, Record<string, unknown>>>()
+
+  // NPC 50042 exists with different values
+  const npcRecords = new Map<number, Record<string, unknown>>()
+  npcRecords.set(50042, {
+    name_text_id: 110042,
+    text_id: 110040,       // DIFFERENT
+    level: 40,             // DIFFERENT (was 40, project wants 45)
+    race_id: 3,
+    sexsual_id: 1,
+    x: 152000,             // DIFFERENT (positional shift)
+    y: 32100,
+    z: 0,
+    stat_id: 8010,         // DIFFERENT
+    weapon_item_id: 30010, // DIFFERENT (old weapon)
+    shield_item_id: 0,
+    clothes_item_id: 30080, // DIFFERENT
+  })
+  records.set("NPCResource", npcRecords)
+
+  // Items 30015 and 30022 exist with different values
+  const itemRecords = new Map<number, Record<string, unknown>>()
+  itemRecords.set(30015, {
+    name_id: 120030,
+    tooltip_id: 120031,
+    type: 1,
+    level: 35,             // DIFFERENT (was 35, project wants 40)
+    grade: 3,              // DIFFERENT (was 3, project wants 4)
+    skill_id: 5008,        // DIFFERENT (old skill)
+    state_id: 7001,
+  })
+  itemRecords.set(30022, {
+    name_id: 120040,
+    tooltip_id: 120041,
+    type: 1,
+    level: 55,             // SAME
+    grade: 4,              // DIFFERENT (was 4, project wants 5)
+    skill_id: 5012,        // SAME
+    state_id: 7002,        // DIFFERENT
+  })
+  records.set("ItemResource", itemRecords)
+
+  // Skill 5010 exists with minor differences
+  const skillRecords = new Map<number, Record<string, unknown>>()
+  skillRecords.set(5010, {
+    text_id: 130010,       // SAME
+    desc_id: 130009,       // DIFFERENT
+    tooltip_id: 130012,    // SAME
+    state_id: 7001,        // SAME
+  })
+  records.set("SkillResource", skillRecords)
+
+  records.set("MonsterResource", new Map())
+  records.set("QuestResource", new Map())
+  records.set("StateResource", new Map())
+
+  return records
 }
